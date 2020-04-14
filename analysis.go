@@ -85,7 +85,7 @@ func analyzeTar(targzFile io.Reader) (*TarInfo, error) {
 			r := NewRollsum()
 			w := io.MultiWriter(h, r)
 			if _, err := io.Copy(w, rdr); err != nil {
-				log.Fatal(err)
+				return nil, err
 			}
 			blobs := r.GetBlobs()
 
@@ -102,15 +102,15 @@ func analyzeTar(targzFile io.Reader) (*TarInfo, error) {
 				blob := blobs[i]
 				// Do some internal self validation
 				if blob.offset != last {
-					log.Fatalf("Wrong start")
+					log.Fatalf("Internal error: Wrong blob start")
 				}
 				if blob.size > maxBlobSize {
-					log.Fatalf("Wrong size")
+					log.Fatalf("Internal error: Wrong blob size")
 				}
 				last = blob.offset + blob.size
 			}
 			if last != hdr.Size {
-				log.Fatalf("Wrong end")
+				log.Fatalf("Internal error: Wrong blob end")
 			}
 
 			fileInfo := TarFileInfo{
@@ -160,12 +160,12 @@ func nameIsSimilar(a *TarFileInfo, b *TarFileInfo, fuzzy int) bool {
 	}
 }
 
-func extractDeltaData(tarGzFile io.Reader, sourceByPath map[string]*SourceInfo, dest *os.File) {
+func extractDeltaData(tarGzFile io.Reader, sourceByPath map[string]*SourceInfo, dest *os.File) error {
 	offset := int64(0)
 
 	tarFile, err := gzip.NewReader(tarGzFile)
 	if err != nil {
-		log.Fatalln("unexpected error: %v", err)
+		return err
 	}
 	defer tarFile.Close()
 
@@ -175,9 +175,10 @@ func extractDeltaData(tarGzFile io.Reader, sourceByPath map[string]*SourceInfo, 
 		hdr, err = rdr.Next()
 		if err != nil {
 			if err == io.EOF {
-				err = nil // Expected error
+				break
+			} else {
+				return err
 			}
-			break
 		}
 		if useTarHeader(hdr) {
 			info := sourceByPath[hdr.Name]
@@ -185,14 +186,15 @@ func extractDeltaData(tarGzFile io.Reader, sourceByPath map[string]*SourceInfo, 
 				info.offset = offset
 				offset += hdr.Size
 				if _, err := io.Copy(dest, rdr); err != nil {
-					log.Fatal(err)
+					return err
 				}
 			}
 		}
 	}
+	return nil
 }
 
-func analyzeForDelta(old *TarInfo, new *TarInfo, oldFile io.Reader) *DeltaAnalysis {
+func analyzeForDelta(old *TarInfo, new *TarInfo, oldFile io.Reader) (*DeltaAnalysis, error) {
 	sourceInfos := make([]SourceInfo, 0, len(old.files))
 	for i := range old.files {
 		sourceInfos = append(sourceInfos, SourceInfo{file: &old.files[i]})
@@ -283,10 +285,13 @@ func analyzeForDelta(old *TarInfo, new *TarInfo, oldFile io.Reader) *DeltaAnalys
 
 	tmpfile, err := ioutil.TempFile("/var/tmp", "tar-diff-")
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
-	extractDeltaData(oldFile, sourceByPath, tmpfile)
+	err = extractDeltaData(oldFile, sourceByPath, tmpfile)
+	if err != nil {
+		return nil, err
+	}
 
-	return &DeltaAnalysis{targetInfos: targetInfos, targetInfoByIndex: targetInfoByIndex, sourceInfos: sourceInfos, sourceData: tmpfile}
+	return &DeltaAnalysis{targetInfos: targetInfos, targetInfoByIndex: targetInfoByIndex, sourceInfos: sourceInfos, sourceData: tmpfile}, nil
 }

@@ -1,7 +1,6 @@
 package tar_diff
 
 // TODO
-// * Better error handling
 // * Handle same file multiple times in tarfile
 // * Handle sparse files
 // * Handle empty files
@@ -267,7 +266,10 @@ func GenerateDelta(oldFile io.ReadSeeker, newFile io.ReadSeeker, deltaFile io.Wr
 	newFile.Seek(0, 0)
 
 	// Compare new and old for delta information
-	analysis := analyzeForDelta(oldInfo, newInfo, oldFile)
+	analysis, err := analyzeForDelta(oldInfo, newInfo, oldFile)
+	if err != nil {
+		return nil
+	}
 	defer analysis.Close()
 
 	// Actually create the delta
