@@ -2,6 +2,7 @@ package tar_diff
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"github.com/klauspost/compress/zstd"
@@ -21,6 +22,8 @@ const (
 	deltaDataChunkSize = 4 * 1024 * 1024
 )
 
+var deltaHeader = [...]byte{'t', 'a', 'r', 'd', 'f', '1', '\n', 0}
+
 type DeltaWriter struct {
 	writer      *zstd.Encoder
 	buffer      []byte
@@ -29,6 +32,11 @@ type DeltaWriter struct {
 }
 
 func NewDeltaWriter(writer io.Writer) (*DeltaWriter, error) {
+	_, err := writer.Write(deltaHeader[:])
+	if err != nil {
+		return nil, err
+	}
+
 	encoder, err := zstd.NewWriter(writer)
 	if err != nil {
 		return nil, err
@@ -201,6 +209,15 @@ func maybeClose(closer io.Closer) {
 }
 
 func ApplyDelta(delta io.Reader, extractedDir string, dst io.Writer) error {
+	buf := make([]byte, len(deltaHeader))
+	_, err := io.ReadFull(delta, buf)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(buf, deltaHeader[:]) {
+		return fmt.Errorf("Invalid delta format")
+	}
+
 	decoder, err := zstd.NewReader(delta)
 	if err != nil {
 		return err
