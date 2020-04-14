@@ -31,13 +31,13 @@ type DeltaWriter struct {
 	currentPos  uint64
 }
 
-func NewDeltaWriter(writer io.Writer) (*DeltaWriter, error) {
+func NewDeltaWriter(writer io.Writer, compressionLevel int) (*DeltaWriter, error) {
 	_, err := writer.Write(deltaHeader[:])
 	if err != nil {
 		return nil, err
 	}
 
-	encoder, err := zstd.NewWriter(writer)
+	encoder, err := zstd.NewWriter(writer, zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(compressionLevel)))
 	if err != nil {
 		return nil, err
 	}

@@ -9,6 +9,7 @@ import (
 )
 
 var version = flag.Bool("version", false, "Show version")
+var compressionLevel = flag.Int("compression-level", 3, "zstd compression level (default 3)")
 
 func main() {
 
@@ -54,7 +55,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = tar_diff.GenerateDelta(oldFile, newFile, deltaFile)
+	err = tar_diff.GenerateDelta(oldFile, newFile, deltaFile, *compressionLevel)
 	if err != nil {
 		fmt.Fprintf(flag.CommandLine.Output(), "Error generating delta: %s\n", err)
 		os.Exit(1)

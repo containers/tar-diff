@@ -190,14 +190,14 @@ func (g *DeltaGenerator) generateForFile(info *TargetInfo) error {
 	return nil
 }
 
-func generateDelta(newFile io.ReadSeeker, deltaFile io.Writer, analysis *DeltaAnalysis) error {
+func generateDelta(newFile io.ReadSeeker, deltaFile io.Writer, analysis *DeltaAnalysis, compressionLevel int) error {
 	tarFile, err := gzip.NewReader(newFile)
 	if err != nil {
 		return err
 	}
 	defer tarFile.Close()
 
-	deltaWriter, err := NewDeltaWriter(deltaFile)
+	deltaWriter, err := NewDeltaWriter(deltaFile, compressionLevel)
 	if err != nil {
 		return err
 	}
@@ -249,7 +249,7 @@ func generateDelta(newFile io.ReadSeeker, deltaFile io.Writer, analysis *DeltaAn
 	return nil
 }
 
-func GenerateDelta(oldFile io.ReadSeeker, newFile io.ReadSeeker, deltaFile io.Writer) error {
+func GenerateDelta(oldFile io.ReadSeeker, newFile io.ReadSeeker, deltaFile io.Writer, compressionLevel int) error {
 	// First analyze both tarfiles by themselves
 	oldInfo, err := analyzeTar(oldFile)
 	if err != nil {
@@ -273,7 +273,7 @@ func GenerateDelta(oldFile io.ReadSeeker, newFile io.ReadSeeker, deltaFile io.Wr
 	defer analysis.Close()
 
 	// Actually create the delta
-	if err := generateDelta(newFile, deltaFile, analysis); err != nil {
+	if err := generateDelta(newFile, deltaFile, analysis, compressionLevel); err != nil {
 		return err
 	}
 
