@@ -172,7 +172,7 @@ func (g *DeltaGenerator) generateForFile(info *TargetInfo) error {
 		if err := g.skipRest(); err != nil {
 			return err
 		}
-	} else if file.isExecutable && sourceFile.isExecutable && file.size < maxBsdiffSize && sourceFile.size < maxBsdiffSize {
+	} else if file.size < maxBsdiffSize && sourceFile.size < maxBsdiffSize {
 		// Use bsdiff to generate delta
 		if err := g.generateForFileWithBsdiff(info); err != nil {
 			return err
