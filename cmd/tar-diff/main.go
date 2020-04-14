@@ -36,33 +36,33 @@ func main() {
 
 	oldFile, err := os.Open(oldFilename)
 	if err != nil {
-		fmt.Fprintf(flag.CommandLine.Output(), "Unable to open %s: %s", oldFilename, err)
+		fmt.Fprintf(flag.CommandLine.Output(), "Unable to open %s: %s\n", oldFilename, err)
 		os.Exit(1)
 	}
 	defer oldFile.Close()
 
 	newFile, err := os.Open(newFilename)
 	if err != nil {
-		fmt.Fprintf(flag.CommandLine.Output(), "Unable to open %s: %s", newFilename, err)
+		fmt.Fprintf(flag.CommandLine.Output(), "Unable to open %s: %s\n", newFilename, err)
 		os.Exit(1)
 	}
 	defer newFile.Close()
 
 	deltaFile, err := os.Create(deltaFilename)
 	if err != nil {
-		fmt.Fprintf(flag.CommandLine.Output(), "Unable to create %s: %s", deltaFilename, err)
+		fmt.Fprintf(flag.CommandLine.Output(), "Unable to create %s: %s\n", deltaFilename, err)
 		os.Exit(1)
 	}
 
 	err = tar_diff.GenerateDelta(oldFile, newFile, deltaFile)
 	if err != nil {
-		fmt.Fprintf(flag.CommandLine.Output(), "Error generating delta: %s", err)
+		fmt.Fprintf(flag.CommandLine.Output(), "Error generating delta: %s\n", err)
 		os.Exit(1)
 	}
 
 	err = deltaFile.Close()
 	if err != nil {
-		fmt.Fprintf(flag.CommandLine.Output(), "Error generating delta: %s", err)
+		fmt.Fprintf(flag.CommandLine.Output(), "Error generating delta: %s\n", err)
 	}
 
 }

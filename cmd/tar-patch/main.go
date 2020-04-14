@@ -35,21 +35,21 @@ func main() {
 
 	deltaFile, err := os.Open(deltaFilename)
 	if err != nil {
-		fmt.Fprintf(flag.CommandLine.Output(), "Unable to open %s: %s", deltaFilename, err)
+		fmt.Fprintf(flag.CommandLine.Output(), "Unable to open %s: %s\n", deltaFilename, err)
 		os.Exit(1)
 	}
 	defer deltaFile.Close()
 
 	patchedFile, err := os.Create(patchedFilename)
 	if err != nil {
-		fmt.Fprintf(flag.CommandLine.Output(), "Unable to create %s: %s", patchedFilename, err)
+		fmt.Fprintf(flag.CommandLine.Output(), "Unable to create %s: %s\n", patchedFilename, err)
 		os.Exit(1)
 	}
 	defer patchedFile.Close()
 
 	err = tar_diff.ApplyDelta(deltaFile, extractedDir, patchedFile)
 	if err != nil {
-		fmt.Fprintf(flag.CommandLine.Output(), "Error applying diff: %s", err)
+		fmt.Fprintf(flag.CommandLine.Output(), "Error applying diff: %s\n", err)
 		os.Exit(1)
 	}
 }
