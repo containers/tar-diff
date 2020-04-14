@@ -10,11 +10,11 @@ import (
 )
 
 const (
-	DeltaOpData = iota
-	DeltaOpOpen = iota
-	DeltaOpCopy = iota
-	DeltaOpSkip = iota
-	DeltaOpSeek = iota
+	DeltaOpData    = iota
+	DeltaOpOpen    = iota
+	DeltaOpCopy    = iota
+	DeltaOpAddData = iota
+	DeltaOpSeek    = iota
 )
 
 const (
@@ -121,6 +121,21 @@ func (d *DeltaWriter) Seek(pos uint64) error {
 	return nil
 }
 
+func (d *DeltaWriter) SeekForward(pos uint64) error {
+	d.currentPos += pos
+
+	err := d.FlushBuffer()
+	if err != nil {
+		return err
+	}
+
+	err = d.writeOp(DeltaOpSeek, d.currentPos, nil)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (d *DeltaWriter) CopyFile(size uint64) error {
 	err := d.FlushBuffer()
 	if err != nil {
@@ -128,6 +143,21 @@ func (d *DeltaWriter) CopyFile(size uint64) error {
 	}
 
 	err = d.writeOp(DeltaOpCopy, size, nil)
+	if err != nil {
+		return err
+	}
+	d.currentPos += size
+	return nil
+}
+
+func (d *DeltaWriter) WriteAddContent(data []byte) error {
+	err := d.FlushBuffer()
+	if err != nil {
+		return err
+	}
+
+	size := uint64(len(data))
+	err = d.writeOp(DeltaOpAddData, size, data)
 	if err != nil {
 		return err
 	}
@@ -226,19 +256,35 @@ func ApplyDelta(delta io.Reader, extractedDir string, dst io.Writer) error {
 			if err != nil {
 				return err
 			}
+		case DeltaOpAddData:
+			if currentFile == nil {
+				return fmt.Errorf("No current file to copy from")
+			}
+
+			addBytes := make([]byte, size)
+			_, err = io.ReadFull(r, addBytes)
+			if err != nil {
+				return err
+			}
+
+			addBytes2 := make([]byte, size)
+			_, err = io.ReadFull(currentFile, addBytes2)
+			if err != nil {
+				return err
+			}
+
+			for i := uint64(0); i < size; i++ {
+				addBytes[i] = addBytes[i] + addBytes2[i]
+			}
+			if _, err := dst.Write(addBytes); err != nil {
+				return err
+			}
+
 		case DeltaOpSeek:
 			if currentFile == nil {
 				return fmt.Errorf("No current file to seek in")
 			}
 			_, err = currentFile.Seek(int64(size), 0)
-			if err != nil {
-				return err
-			}
-		case DeltaOpSkip:
-			if currentFile == nil {
-				return fmt.Errorf("No current file to skip in")
-			}
-			_, err = currentFile.Seek(int64(size), 1)
 			if err != nil {
 				return err
 			}

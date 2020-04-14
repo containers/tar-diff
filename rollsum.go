@@ -40,7 +40,8 @@ type Rollsum struct {
 	wofs   int32
 
 	// Resulting blobs
-	blobs []RollsumBlob
+	header []byte
+	blobs  []RollsumBlob
 }
 
 // These formulas are based on rollsum.h in the librsync project.
@@ -85,6 +86,7 @@ func (r *Rollsum) addBlob() {
 
 func NewRollsum() *Rollsum {
 	r := new(Rollsum)
+	r.header = make([]byte, 0, 16)
 	r.blobs = make([]RollsumBlob, 0)
 	r.init()
 	return r
@@ -101,10 +103,25 @@ func (r *Rollsum) GetBlobs() []RollsumBlob {
 	return r.blobs
 }
 
+func (r *Rollsum) GetHeader() []byte {
+	return r.header
+}
+
 func (r *Rollsum) Write(p []byte) (nn int, err error) {
 	nn = len(p)
 	if nn == 0 {
 		return
+	}
+
+	// Keep the first cap(header) bytes for type detection
+	header := r.header
+	if len(header) < cap(header) {
+		for i := 0; len(header) < cap(header) && i < len(p); i++ {
+			l := len(header)
+			header = header[:l+1]
+			header[l] = p[i]
+		}
+		r.header = header
 	}
 
 	start := 0

@@ -19,12 +19,13 @@ const (
 )
 
 type TarFileInfo struct {
-	index    int
-	basename string
-	path     string
-	size     int64
-	sha1     string
-	blobs    []RollsumBlob
+	index        int
+	basename     string
+	path         string
+	size         int64
+	sha1         string
+	isExecutable bool
+	blobs        []RollsumBlob
 }
 
 type TarInfo struct {
@@ -88,6 +89,14 @@ func analyzeTar(targzFile io.Reader) (*TarInfo, error) {
 			}
 			blobs := r.GetBlobs()
 
+			header := r.GetHeader()
+
+			isExecutable := false
+			// Check for elf header
+			if len(header) > 4 && header[0] == 0x7f && header[1] == 'E' && header[2] == 'L' && header[3] == 'F' {
+				isExecutable = true
+			}
+
 			last := int64(0)
 			for i := range blobs {
 				blob := blobs[i]
@@ -105,12 +114,13 @@ func analyzeTar(targzFile io.Reader) (*TarInfo, error) {
 			}
 
 			fileInfo := TarFileInfo{
-				index:    index,
-				basename: path.Base(hdr.Name),
-				path:     hdr.Name,
-				size:     hdr.Size,
-				sha1:     hex.EncodeToString(h.Sum(nil)),
-				blobs:    blobs,
+				index:        index,
+				basename:     path.Base(hdr.Name),
+				path:         hdr.Name,
+				size:         hdr.Size,
+				sha1:         hex.EncodeToString(h.Sum(nil)),
+				isExecutable: isExecutable,
+				blobs:        blobs,
 			}
 			files = append(files, fileInfo)
 		}

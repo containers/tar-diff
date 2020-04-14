@@ -15,6 +15,10 @@ import (
 	"io/ioutil"
 )
 
+const (
+	maxBsdiffSize = 64 * 1024 * 1024
+)
+
 type DeltaGenerator struct {
 	stealingTarFile *StealerReader
 	tarReader       *tar.Reader
@@ -69,6 +73,38 @@ func (g *DeltaGenerator) readSourceData(source *SourceInfo, offset int64, size i
 	buf := make([]byte, size)
 	_, err := io.ReadFull(g.analysis.sourceData, buf)
 	return buf, err
+}
+
+func (g *DeltaGenerator) generateForFileWithBsdiff(info *TargetInfo) error {
+	file := info.file
+	source := info.source
+
+	err := g.deltaWriter.SetCurrentFile(source.file.path)
+	if err != nil {
+		return err
+	}
+
+	err = g.deltaWriter.Seek(0)
+	if err != nil {
+		return err
+	}
+
+	oldData, err := g.readSourceData(source, 0, source.file.size)
+	if err != nil {
+		return err
+	}
+
+	newData, err := g.readN(file.size)
+	if err != nil {
+		return err
+	}
+
+	err = bsdiff(oldData, newData, g.deltaWriter)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (g *DeltaGenerator) generateForFileWithRollsums(info *TargetInfo) error {
@@ -126,17 +162,23 @@ func (g *DeltaGenerator) generateForFileWithRollsums(info *TargetInfo) error {
 
 func (g *DeltaGenerator) generateForFile(info *TargetInfo) error {
 	file := info.file
-	source := info.source
-	if source.file.sha1 == file.sha1 && source.file.size == file.size {
+	sourceFile := info.source.file
+
+	if sourceFile.sha1 == file.sha1 && sourceFile.size == file.size {
 		// Reuse exact file from old tar
-		if err := g.deltaWriter.WriteOldFile(source.file.path, uint64(source.file.size)); err != nil {
+		if err := g.deltaWriter.WriteOldFile(sourceFile.path, uint64(sourceFile.size)); err != nil {
 			return err
 		}
 
 		if err := g.skipRest(); err != nil {
 			return err
 		}
-	} else if info.rollsumMatches != nil && info.rollsumMatches.matchRatio > 50 {
+	} else if file.isExecutable && sourceFile.isExecutable && file.size < maxBsdiffSize && sourceFile.size < maxBsdiffSize {
+		// Use bsdiff to generate delta
+		if err := g.generateForFileWithBsdiff(info); err != nil {
+			return err
+		}
+	} else if info.rollsumMatches != nil && info.rollsumMatches.matchRatio > 20 {
 		// Use rollsums to generate delta
 		if err := g.generateForFileWithRollsums(info); err != nil {
 			return err
