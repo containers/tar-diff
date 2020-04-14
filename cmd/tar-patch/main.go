@@ -1,36 +1,55 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"github.com/alexlarsson/tar-diff"
-	"log"
 	"os"
+	"path"
 )
 
+var version = flag.Bool("version", false, "Show version")
+
 func main() {
-	args := os.Args[1:]
-	if len(args) != 3 {
-		log.Fatalln("Not enough arguments")
+	flag.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [OPION] file.tardiff /path/to/content destination.tar\n", path.Base(os.Args[0]))
+		fmt.Fprintf(flag.CommandLine.Output(), "Options:\n")
+		flag.PrintDefaults()
 	}
 
-	deltaFilename := args[0]
-	extractedDir := args[1]
-	patchedFilename := args[2]
+	flag.Parse()
+
+	if *version {
+		fmt.Printf("%s %s\n", path.Base(os.Args[0]), tar_diff.VERSION)
+		return
+	}
+
+	if flag.NArg() != 3 {
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	deltaFilename := flag.Arg(0)
+	extractedDir := flag.Arg(1)
+	patchedFilename := flag.Arg(2)
 
 	deltaFile, err := os.Open(deltaFilename)
 	if err != nil {
-		log.Fatalln("unexpected error: %v", err)
+		fmt.Fprintf(flag.CommandLine.Output(), "Unable to open %s: %s", deltaFilename, err)
+		os.Exit(1)
 	}
 	defer deltaFile.Close()
 
 	patchedFile, err := os.Create(patchedFilename)
 	if err != nil {
-		log.Fatalln("unexpected error: %v", err)
+		fmt.Fprintf(flag.CommandLine.Output(), "Unable to create %s: %s", patchedFilename, err)
+		os.Exit(1)
 	}
 	defer patchedFile.Close()
 
 	err = tar_diff.ApplyDelta(deltaFile, extractedDir, patchedFile)
 	if err != nil {
-		log.Fatalln("unexpected error: %v", err)
+		fmt.Fprintf(flag.CommandLine.Output(), "Error applying diff: %s", err)
+		os.Exit(1)
 	}
-
 }

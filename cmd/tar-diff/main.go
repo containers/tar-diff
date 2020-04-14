@@ -1,46 +1,68 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"github.com/alexlarsson/tar-diff"
-	"log"
 	"os"
+	"path"
 )
 
+var version = flag.Bool("version", false, "Show version")
+
 func main() {
-	args := os.Args[1:]
-	if len(args) != 3 {
-		log.Fatalln("Not enough arguments")
+
+	flag.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [OPION] old.tar.gz new.tar.gz result.tardiff\n", path.Base(os.Args[0]))
+		fmt.Fprintf(flag.CommandLine.Output(), "Options:\n")
+		flag.PrintDefaults()
 	}
 
-	oldFilename := args[0]
-	newFilename := args[1]
-	deltaFilename := args[2]
+	flag.Parse()
+
+	if *version {
+		fmt.Printf("%s %s\n", path.Base(os.Args[0]), tar_diff.VERSION)
+		return
+	}
+
+	if flag.NArg() != 3 {
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	oldFilename := flag.Arg(0)
+	newFilename := flag.Arg(1)
+	deltaFilename := flag.Arg(2)
 
 	oldFile, err := os.Open(oldFilename)
 	if err != nil {
-		log.Fatalln("Unable to open %s: %s", oldFilename, err)
+		fmt.Fprintf(flag.CommandLine.Output(), "Unable to open %s: %s", oldFilename, err)
+		os.Exit(1)
 	}
 	defer oldFile.Close()
 
 	newFile, err := os.Open(newFilename)
 	if err != nil {
-		log.Fatalln("Unable to open %s: %s", newFilename, err)
+		fmt.Fprintf(flag.CommandLine.Output(), "Unable to open %s: %s", newFilename, err)
+		os.Exit(1)
 	}
 	defer newFile.Close()
 
 	deltaFile, err := os.Create(deltaFilename)
 	if err != nil {
-		log.Fatalln("Unable to create %s: %s", deltaFilename, err)
+		fmt.Fprintf(flag.CommandLine.Output(), "Unable to create %s: %s", deltaFilename, err)
+		os.Exit(1)
 	}
 
 	err = tar_diff.GenerateDelta(oldFile, newFile, deltaFile)
 	if err != nil {
-		log.Fatalln("Error generating delta: %v", err)
+		fmt.Fprintf(flag.CommandLine.Output(), "Error generating delta: %s", err)
+		os.Exit(1)
 	}
 
 	err = deltaFile.Close()
 	if err != nil {
-		log.Fatalln("Error writing delta: %v", err)
+		fmt.Fprintf(flag.CommandLine.Output(), "Error generating delta: %s", err)
 	}
 
 }
