@@ -2,8 +2,6 @@ package tar_diff
 
 // TODO
 // * Handle same file multiple times in tarfile
-// * Handle sparse files
-// * Handle empty files
 // * Handle hardlinks
 
 import (

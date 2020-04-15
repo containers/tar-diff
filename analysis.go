@@ -57,9 +57,35 @@ func (a *DeltaAnalysis) Close() {
 	os.Remove(a.sourceData.Name())
 }
 
+func isSparseFile(hdr *tar.Header) bool {
+	if hdr.Typeflag == tar.TypeGNUSparse {
+		return true
+	}
+	if hdr.Typeflag == tar.TypeReg &&
+		(hdr.PAXRecords["GNU.sparse.major"] != "" || hdr.PAXRecords["GNU.sparse.minor"] != "" || hdr.PAXRecords["GNU.sparse.map"] != "") {
+		return true
+	}
+
+	return false
+}
+
 func useTarHeader(hdr *tar.Header) bool {
-	// Note: We never create file info for empty files, since we don't do anything with them
-	return hdr.Typeflag == tar.TypeReg && hdr.Size > 0
+	if hdr.Typeflag != tar.TypeReg {
+		return false
+	}
+
+	// We never create file info for empty files, since we can't delta with them
+	if hdr.Size == 0 {
+		return false
+	}
+
+	// Sparse headers will return file content that doesn't match the tarfile stream contents, so lets just
+	// not delta them. We could do better here, but I don't think sparse files are very common.
+	if isSparseFile(hdr) {
+		return false
+	}
+
+	return true
 }
 
 func analyzeTar(targzFile io.Reader) (*TarInfo, error) {
