@@ -19,14 +19,13 @@ const (
 )
 
 type TarFileInfo struct {
-	index         int
-	basename      string
-	path          string
-	size          int64
-	sha1          string
-	isExecutable  bool
-	worldReadable bool
-	blobs         []RollsumBlob
+	index        int
+	basename     string
+	path         string
+	size         int64
+	sha1         string
+	isExecutable bool
+	blobs        []RollsumBlob
 }
 
 type TarInfo struct {
@@ -69,6 +68,7 @@ func isSparseFile(hdr *tar.Header) bool {
 	return false
 }
 
+// Ignore all the files that make no sense to either delta or re-use as is
 func useTarHeader(hdr *tar.Header) bool {
 	if hdr.Typeflag != tar.TypeReg {
 		return false
@@ -82,6 +82,13 @@ func useTarHeader(hdr *tar.Header) bool {
 	// Sparse headers will return file content that doesn't match the tarfile stream contents, so lets just
 	// not delta them. We could do better here, but I don't think sparse files are very common.
 	if isSparseFile(hdr) {
+		return false
+	}
+
+	// We don't want to delta files that may be problematic to
+	// read (e.g. /etc/shadow) when applying the delta. These are
+	// uncommon anyway so no big deal.
+	if (hdr.Mode & 00004) == 0 {
 		return false
 	}
 
@@ -125,11 +132,6 @@ func analyzeTar(targzFile io.Reader) (*TarInfo, error) {
 				isExecutable = true
 			}
 
-			worldReadable := false
-			if (hdr.Mode & 00004) != 0 {
-				worldReadable = true
-			}
-
 			last := int64(0)
 			for i := range blobs {
 				blob := blobs[i]
@@ -147,14 +149,13 @@ func analyzeTar(targzFile io.Reader) (*TarInfo, error) {
 			}
 
 			fileInfo := TarFileInfo{
-				index:         index,
-				basename:      path.Base(hdr.Name),
-				path:          hdr.Name,
-				size:          hdr.Size,
-				sha1:          hex.EncodeToString(h.Sum(nil)),
-				isExecutable:  isExecutable,
-				worldReadable: worldReadable,
-				blobs:         blobs,
+				index:        index,
+				basename:     path.Base(hdr.Name),
+				path:         hdr.Name,
+				size:         hdr.Size,
+				sha1:         hex.EncodeToString(h.Sum(nil)),
+				isExecutable: isExecutable,
+				blobs:        blobs,
 			}
 			files = append(files, fileInfo)
 		}
@@ -169,14 +170,9 @@ func analyzeTar(targzFile io.Reader) (*TarInfo, error) {
 	return &info, nil
 }
 
+// This is not called for files that can be used as-is, only for files that would
+// be diffed with bsdiff or rollsums
 func isDeltaCandidate(file *TarFileInfo) bool {
-	// We don't want to delta files that may be problematic to
-	// read (e.g. /etc/shadow) when applying the delta. These are
-	// uncommon anyway so no big deal.
-	if !file.worldReadable {
-		return false
-	}
-
 	// Look for known non-delta-able files (currently just compression)
 	// NB: We explicitly don't have .gz here in case someone might be
 	// using --rsyncable for that.
@@ -255,7 +251,7 @@ func analyzeForDelta(old *TarInfo, new *TarInfo, oldFile io.Reader) (*DeltaAnaly
 		var source *SourceInfo
 		sha1Source := sourceBySha1[file.sha1]
 		// If same sha1 and size, use original total size
-		if sha1Source != nil && file.size == sha1Source.file.size && sha1Source.file.worldReadable {
+		if sha1Source != nil && file.size == sha1Source.file.size {
 			source = sha1Source
 		}
 		if source == nil && isDeltaCandidate(file) {
