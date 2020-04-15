@@ -194,7 +194,7 @@ func nameIsSimilar(a *TarFileInfo, b *TarFileInfo, fuzzy int) bool {
 	}
 }
 
-func extractDeltaData(tarGzFile io.Reader, sourceByPath map[string]*SourceInfo, dest *os.File) error {
+func extractDeltaData(tarGzFile io.Reader, sourceByIndex map[int]*SourceInfo, dest *os.File) error {
 	offset := int64(0)
 
 	tarFile, err := gzip.NewReader(tarGzFile)
@@ -204,7 +204,7 @@ func extractDeltaData(tarGzFile io.Reader, sourceByPath map[string]*SourceInfo, 
 	defer tarFile.Close()
 
 	rdr := tar.NewReader(tarFile)
-	for {
+	for index := 0; true; index++ {
 		var hdr *tar.Header
 		hdr, err = rdr.Next()
 		if err != nil {
@@ -215,7 +215,7 @@ func extractDeltaData(tarGzFile io.Reader, sourceByPath map[string]*SourceInfo, 
 			}
 		}
 		if useTarHeader(hdr) {
-			info := sourceByPath[hdr.Name]
+			info := sourceByIndex[index]
 			if info.usedForDelta {
 				info.offset = offset
 				offset += hdr.Size
@@ -236,10 +236,12 @@ func analyzeForDelta(old *TarInfo, new *TarInfo, oldFile io.Reader) (*DeltaAnaly
 
 	sourceBySha1 := make(map[string]*SourceInfo)
 	sourceByPath := make(map[string]*SourceInfo)
+	sourceByIndex := make(map[int]*SourceInfo)
 	for i := range sourceInfos {
 		s := &sourceInfos[i]
 		sourceBySha1[s.file.sha1] = s
 		sourceByPath[s.file.path] = s
+		sourceByIndex[s.file.index] = s
 	}
 
 	targetInfos := make([]TargetInfo, 0, len(new.files))
@@ -322,7 +324,7 @@ func analyzeForDelta(old *TarInfo, new *TarInfo, oldFile io.Reader) (*DeltaAnaly
 		return nil, err
 	}
 
-	err = extractDeltaData(oldFile, sourceByPath, tmpfile)
+	err = extractDeltaData(oldFile, sourceByIndex, tmpfile)
 	if err != nil {
 		return nil, err
 	}
