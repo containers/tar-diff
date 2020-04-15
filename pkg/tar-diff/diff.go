@@ -247,31 +247,50 @@ func generateDelta(newFile io.ReadSeeker, deltaFile io.Writer, analysis *deltaAn
 	return nil
 }
 
-func GenerateDelta(oldFile io.ReadSeeker, newFile io.ReadSeeker, deltaFile io.Writer, compressionLevel int) error {
+type Options struct {
+	compressionLevel int
+}
+
+func (o *Options) SetCompressionLevel(compressionLevel int) {
+	o.compressionLevel = compressionLevel
+}
+
+func NewOptions() *Options {
+	return &Options{
+		compressionLevel: 3,
+	}
+}
+
+func Diff(oldTarFile io.ReadSeeker, newTarFile io.ReadSeeker, diffFile io.Writer, options *Options) error {
+
+	if options == nil {
+		options = NewOptions()
+	}
+
 	// First analyze both tarfiles by themselves
-	oldInfo, err := analyzeTar(oldFile)
+	oldInfo, err := analyzeTar(oldTarFile)
 	if err != nil {
 		return err
 	}
 
-	newInfo, err := analyzeTar(newFile)
+	newInfo, err := analyzeTar(newTarFile)
 	if err != nil {
 		return err
 	}
 
 	// Reset tar.gz for re-reading
-	oldFile.Seek(0, 0)
-	newFile.Seek(0, 0)
+	oldTarFile.Seek(0, 0)
+	newTarFile.Seek(0, 0)
 
 	// Compare new and old for delta information
-	analysis, err := analyzeForDelta(oldInfo, newInfo, oldFile)
+	analysis, err := analyzeForDelta(oldInfo, newInfo, oldTarFile)
 	if err != nil {
 		return nil
 	}
 	defer analysis.Close()
 
 	// Actually create the delta
-	if err := generateDelta(newFile, deltaFile, analysis, compressionLevel); err != nil {
+	if err := generateDelta(newTarFile, diffFile, analysis, options.compressionLevel); err != nil {
 		return err
 	}
 

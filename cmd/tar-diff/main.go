@@ -56,7 +56,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = tar_diff.GenerateDelta(oldFile, newFile, deltaFile, *compressionLevel)
+	options := tar_diff.NewOptions()
+	options.SetCompressionLevel(*compressionLevel)
+
+	err = tar_diff.Diff(oldFile, newFile, deltaFile, options)
 	if err != nil {
 		fmt.Fprintf(flag.CommandLine.Output(), "Error generating delta: %s\n", err)
 		os.Exit(1)
