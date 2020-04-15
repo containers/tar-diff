@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"path"
 	"sort"
@@ -19,13 +18,13 @@ const (
 )
 
 type TarFileInfo struct {
-	index        int
-	basename     string
-	path         string
-	size         int64
-	sha1         string
-	isExecutable bool
-	blobs        []RollsumBlob
+	index       int
+	basename    string
+	path        string
+	size        int64
+	sha1        string
+	blobs       []RollsumBlob
+	overwritten bool
 }
 
 type TarInfo struct {
@@ -68,8 +67,37 @@ func isSparseFile(hdr *tar.Header) bool {
 	return false
 }
 
+// Makes absolute paths relative, removes "/./" and "//" elements and resolves "/../" element inside the path
+// Any ".." that extends outside the first elements is invalid and returns ""
+func cleanPath(path string) string {
+	elements := strings.Split(path, "/")
+	res := make([]string, 0, len(elements))
+
+	for i := range elements {
+		element := elements[i]
+		if element == "" {
+			continue // Skip "//" style elements, or first /
+		} else if element == "." {
+			continue // Skip "/./" style elements
+		} else if element == ".." {
+			if len(res) == 0 {
+				return "" // .. goes outside root, invalid
+			}
+			res = res[:len(res)-1]
+		} else {
+			res = append(res, element)
+		}
+	}
+	return strings.Join(res, "/")
+}
+
 // Ignore all the files that make no sense to either delta or re-use as is
-func useTarHeader(hdr *tar.Header) bool {
+func useTarFile(hdr *tar.Header, cleanPath string) bool {
+	// Don't use invalid paths (as returned by cleanPath)
+	if cleanPath == "" {
+		return false
+	}
+
 	if hdr.Typeflag != tar.TypeReg {
 		return false
 	}
@@ -103,6 +131,7 @@ func analyzeTar(targzFile io.Reader) (*TarInfo, error) {
 	defer tarFile.Close()
 
 	files := make([]TarFileInfo, 0)
+	infoByPath := make(map[string]int) // map from path to index in 'files'
 
 	rdr := tar.NewReader(tarFile)
 	for index := 0; true; index++ {
@@ -115,50 +144,35 @@ func analyzeTar(targzFile io.Reader) (*TarInfo, error) {
 				return nil, err
 			}
 		}
-		if useTarHeader(hdr) {
-			h := sha1.New()
-			r := NewRollsum()
-			w := io.MultiWriter(h, r)
-			if _, err := io.Copy(w, rdr); err != nil {
-				return nil, err
-			}
-			blobs := r.GetBlobs()
+		// Normalize name, for safety
+		pathname := cleanPath(hdr.Name)
 
-			header := r.GetHeader()
-
-			isExecutable := false
-			// Check for elf header
-			if len(header) > 4 && header[0] == 0x7f && header[1] == 'E' && header[2] == 'L' && header[3] == 'F' {
-				isExecutable = true
-			}
-
-			last := int64(0)
-			for i := range blobs {
-				blob := blobs[i]
-				// Do some internal self validation
-				if blob.offset != last {
-					log.Fatalf("Internal error: Wrong blob start")
-				}
-				if blob.size > maxBlobSize {
-					log.Fatalf("Internal error: Wrong blob size")
-				}
-				last = blob.offset + blob.size
-			}
-			if last != hdr.Size {
-				log.Fatalf("Internal error: Wrong blob end")
-			}
-
-			fileInfo := TarFileInfo{
-				index:        index,
-				basename:     path.Base(hdr.Name),
-				path:         hdr.Name,
-				size:         hdr.Size,
-				sha1:         hex.EncodeToString(h.Sum(nil)),
-				isExecutable: isExecutable,
-				blobs:        blobs,
-			}
-			files = append(files, fileInfo)
+		// If a file is in the archive several times, mark it as overwritten so its not used for delta source
+		if oldIndex, ok := infoByPath[pathname]; ok {
+			files[oldIndex].overwritten = true
 		}
+
+		if !useTarFile(hdr, pathname) {
+			continue
+		}
+
+		h := sha1.New()
+		r := NewRollsum()
+		w := io.MultiWriter(h, r)
+		if _, err := io.Copy(w, rdr); err != nil {
+			return nil, err
+		}
+
+		fileInfo := TarFileInfo{
+			index:    index,
+			basename: path.Base(pathname),
+			path:     pathname,
+			size:     hdr.Size,
+			sha1:     hex.EncodeToString(h.Sum(nil)),
+			blobs:    r.GetBlobs(),
+		}
+		infoByPath[pathname] = len(files)
+		files = append(files, fileInfo)
 	}
 
 	// Sort, smallest files first
@@ -214,14 +228,12 @@ func extractDeltaData(tarGzFile io.Reader, sourceByIndex map[int]*SourceInfo, de
 				return err
 			}
 		}
-		if useTarHeader(hdr) {
-			info := sourceByIndex[index]
-			if info.usedForDelta {
-				info.offset = offset
-				offset += hdr.Size
-				if _, err := io.Copy(dest, rdr); err != nil {
-					return err
-				}
+		info := sourceByIndex[index]
+		if info != nil && info.usedForDelta {
+			info.offset = offset
+			offset += hdr.Size
+			if _, err := io.Copy(dest, rdr); err != nil {
+				return err
 			}
 		}
 	}
@@ -239,9 +251,11 @@ func analyzeForDelta(old *TarInfo, new *TarInfo, oldFile io.Reader) (*DeltaAnaly
 	sourceByIndex := make(map[int]*SourceInfo)
 	for i := range sourceInfos {
 		s := &sourceInfos[i]
-		sourceBySha1[s.file.sha1] = s
-		sourceByPath[s.file.path] = s
-		sourceByIndex[s.file.index] = s
+		if !s.file.overwritten {
+			sourceBySha1[s.file.sha1] = s
+			sourceByPath[s.file.path] = s
+			sourceByIndex[s.file.index] = s
+		}
 	}
 
 	targetInfos := make([]TargetInfo, 0, len(new.files))
