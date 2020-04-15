@@ -77,9 +77,10 @@ func analyzeTar(targzFile io.Reader) (*TarInfo, error) {
 		hdr, err = rdr.Next()
 		if err != nil {
 			if err == io.EOF {
-				err = nil // Expected error
+				break // Expected error
+			} else {
+				return nil, err
 			}
-			break
 		}
 		if useTarHeader(hdr) {
 			h := sha1.New()
@@ -186,7 +187,7 @@ func extractDeltaData(tarGzFile io.Reader, sourceByPath map[string]*SourceInfo, 
 		hdr, err = rdr.Next()
 		if err != nil {
 			if err == io.EOF {
-				break
+				break // Expected error
 			} else {
 				return err
 			}
