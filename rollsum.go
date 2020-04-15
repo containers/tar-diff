@@ -158,6 +158,7 @@ type RollsumMatch struct {
 type RollsumMatches struct {
 	matches    []RollsumMatch
 	matchRatio int
+	matchSize  int64
 }
 
 func ComputeRollsumMatches(from []RollsumBlob, to []RollsumBlob) *RollsumMatches {
@@ -194,5 +195,6 @@ func ComputeRollsumMatches(from []RollsumBlob, to []RollsumBlob) *RollsumMatches
 	return &RollsumMatches{
 		matches:    matches,
 		matchRatio: nMatches * 100 / len(to),
+		matchSize:  matchSize,
 	}
 }
