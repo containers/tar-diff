@@ -15,7 +15,7 @@ func maybeClose(closer io.Closer) {
 	closer.Close()
 }
 
-func ApplyDelta(delta io.Reader, extractedDir string, dst io.Writer) error {
+func Apply(delta io.Reader, extractedDir string, dst io.Writer) error {
 	buf := make([]byte, len(common.DeltaHeader))
 	_, err := io.ReadFull(delta, buf)
 	if err != nil {

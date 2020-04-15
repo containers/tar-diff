@@ -48,7 +48,7 @@ func main() {
 	}
 	defer patchedFile.Close()
 
-	err = tar_patch.ApplyDelta(deltaFile, extractedDir, patchedFile)
+	err = tar_patch.Apply(deltaFile, extractedDir, patchedFile)
 	if err != nil {
 		fmt.Fprintf(flag.CommandLine.Output(), "Error applying diff: %s\n", err)
 		os.Exit(1)
