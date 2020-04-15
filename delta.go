@@ -24,14 +24,14 @@ const (
 
 var deltaHeader = [...]byte{'t', 'a', 'r', 'd', 'f', '1', '\n', 0}
 
-type DeltaWriter struct {
+type deltaWriter struct {
 	writer      *zstd.Encoder
 	buffer      []byte
 	currentFile string
 	currentPos  uint64
 }
 
-func NewDeltaWriter(writer io.Writer, compressionLevel int) (*DeltaWriter, error) {
+func newDeltaWriter(writer io.Writer, compressionLevel int) (*deltaWriter, error) {
 	_, err := writer.Write(deltaHeader[:])
 	if err != nil {
 		return nil, err
@@ -41,11 +41,11 @@ func NewDeltaWriter(writer io.Writer, compressionLevel int) (*DeltaWriter, error
 	if err != nil {
 		return nil, err
 	}
-	d := DeltaWriter{writer: encoder, buffer: make([]byte, 0, deltaDataChunkSize)}
+	d := deltaWriter{writer: encoder, buffer: make([]byte, 0, deltaDataChunkSize)}
 	return &d, nil
 }
 
-func (d *DeltaWriter) writeOp(op uint8, size uint64, data []byte) error {
+func (d *deltaWriter) writeOp(op uint8, size uint64, data []byte) error {
 	buf := make([]byte, 1+binary.MaxVarintLen64)
 	buf[0] = op
 	sizeLen := binary.PutUvarint(buf[1:], size)
@@ -64,7 +64,7 @@ func (d *DeltaWriter) writeOp(op uint8, size uint64, data []byte) error {
 	return nil
 }
 
-func (d *DeltaWriter) FlushBuffer() error {
+func (d *deltaWriter) FlushBuffer() error {
 	if len(d.buffer) == 0 {
 		return nil
 	}
@@ -73,7 +73,7 @@ func (d *DeltaWriter) FlushBuffer() error {
 	return err
 }
 
-func (d *DeltaWriter) Close() error {
+func (d *deltaWriter) Close() error {
 	if d.writer == nil {
 		return nil
 	}
@@ -82,7 +82,7 @@ func (d *DeltaWriter) Close() error {
 	return err
 }
 
-func (d *DeltaWriter) WriteContent(data []byte) error {
+func (d *deltaWriter) WriteContent(data []byte) error {
 	d.buffer = append(d.buffer, data...)
 
 	if len(d.buffer) >= deltaDataChunkSize {
@@ -93,7 +93,7 @@ func (d *DeltaWriter) WriteContent(data []byte) error {
 }
 
 // Switches to new file if needed and ensures we're at the start of it
-func (d *DeltaWriter) SetCurrentFile(filename string) error {
+func (d *deltaWriter) SetCurrentFile(filename string) error {
 	if d.currentFile != filename {
 		nameBytes := []byte(filename)
 		err := d.FlushBuffer()
@@ -111,7 +111,7 @@ func (d *DeltaWriter) SetCurrentFile(filename string) error {
 	return nil
 }
 
-func (d *DeltaWriter) Seek(pos uint64) error {
+func (d *deltaWriter) Seek(pos uint64) error {
 	if d.currentPos == pos {
 		return nil
 	}
@@ -129,7 +129,7 @@ func (d *DeltaWriter) Seek(pos uint64) error {
 	return nil
 }
 
-func (d *DeltaWriter) SeekForward(pos uint64) error {
+func (d *deltaWriter) SeekForward(pos uint64) error {
 	d.currentPos += pos
 
 	err := d.FlushBuffer()
@@ -144,7 +144,7 @@ func (d *DeltaWriter) SeekForward(pos uint64) error {
 	return nil
 }
 
-func (d *DeltaWriter) CopyFile(size uint64) error {
+func (d *deltaWriter) CopyFile(size uint64) error {
 	err := d.FlushBuffer()
 	if err != nil {
 		return err
@@ -158,7 +158,7 @@ func (d *DeltaWriter) CopyFile(size uint64) error {
 	return nil
 }
 
-func (d *DeltaWriter) WriteAddContent(data []byte) error {
+func (d *deltaWriter) WriteAddContent(data []byte) error {
 	err := d.FlushBuffer()
 	if err != nil {
 		return err
@@ -173,7 +173,7 @@ func (d *DeltaWriter) WriteAddContent(data []byte) error {
 	return nil
 }
 
-func (d *DeltaWriter) CopyFileAt(offset uint64, size uint64) error {
+func (d *deltaWriter) CopyFileAt(offset uint64, size uint64) error {
 	if err := d.Seek(offset); err != nil {
 		return err
 	}
@@ -183,7 +183,7 @@ func (d *DeltaWriter) CopyFileAt(offset uint64, size uint64) error {
 	return nil
 }
 
-func (d *DeltaWriter) WriteOldFile(filename string, size uint64) error {
+func (d *deltaWriter) WriteOldFile(filename string, size uint64) error {
 	err := d.SetCurrentFile(filename)
 	if err != nil {
 		return err
@@ -198,7 +198,7 @@ func (d *DeltaWriter) WriteOldFile(filename string, size uint64) error {
 	return nil
 }
 
-func (d *DeltaWriter) Write(data []byte) (int, error) {
+func (d *deltaWriter) Write(data []byte) (int, error) {
 	n := len(data)
 	err := d.WriteContent(data)
 	return n, err

@@ -36,7 +36,7 @@ import (
 	"bytes"
 )
 
-func bsdiff(oldbin, newbin []byte, deltaWriter *DeltaWriter) error {
+func bsdiff(oldbin, newbin []byte, deltaWriter *deltaWriter) error {
 	iii := make([]int, len(oldbin)+1)
 	qsufsort(iii, oldbin)
 

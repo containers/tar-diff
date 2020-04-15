@@ -4,7 +4,7 @@ import (
 	"io"
 )
 
-type StealerReader struct {
+type stealerReader struct {
 	source  io.Reader
 	stealer io.Writer
 	ignore  bool
@@ -14,11 +14,11 @@ type StealerReader struct {
 // it is also written to the stealer, unless this is temporary
 // disabled by SetIgnore(true)
 
-func NewStealerReader(source io.Reader, stealer io.Writer) *StealerReader {
-	return &StealerReader{source: source, stealer: stealer}
+func newStealerReader(source io.Reader, stealer io.Writer) *stealerReader {
+	return &stealerReader{source: source, stealer: stealer}
 }
 
-func (s *StealerReader) Read(p []byte) (int, error) {
+func (s *stealerReader) Read(p []byte) (int, error) {
 	n, err := s.source.Read(p)
 	var writeErr error = nil
 	if !s.ignore && n > 0 {
@@ -34,6 +34,6 @@ func (s *StealerReader) Read(p []byte) (int, error) {
 	return n, nil
 }
 
-func (s *StealerReader) SetIgnore(ignore bool) {
+func (s *stealerReader) SetIgnore(ignore bool) {
 	s.ignore = ignore
 }

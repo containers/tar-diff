@@ -17,40 +17,40 @@ const (
 	similarityPercentThreshold = 30
 )
 
-type TarFileInfo struct {
+type tarFileInfo struct {
 	index       int
 	basename    string
 	path        string
 	size        int64
 	sha1        string
-	blobs       []RollsumBlob
+	blobs       []rollsumBlob
 	overwritten bool
 }
 
-type TarInfo struct {
-	files []TarFileInfo // Sorted by size, no size=0 files
+type tarInfo struct {
+	files []tarFileInfo // Sorted by size, no size=0 files
 }
 
-type TargetInfo struct {
-	file           *TarFileInfo
-	source         *SourceInfo
-	rollsumMatches *RollsumMatches
+type targetInfo struct {
+	file           *tarFileInfo
+	source         *sourceInfo
+	rollsumMatches *rollsumMatches
 }
 
-type SourceInfo struct {
-	file         *TarFileInfo
+type sourceInfo struct {
+	file         *tarFileInfo
 	usedForDelta bool
 	offset       int64
 }
 
-type DeltaAnalysis struct {
-	targetInfos       []TargetInfo
-	sourceInfos       []SourceInfo
+type deltaAnalysis struct {
+	targetInfos       []targetInfo
+	sourceInfos       []sourceInfo
 	sourceData        *os.File
-	targetInfoByIndex map[int]*TargetInfo
+	targetInfoByIndex map[int]*targetInfo
 }
 
-func (a *DeltaAnalysis) Close() {
+func (a *deltaAnalysis) Close() {
 	a.sourceData.Close()
 	os.Remove(a.sourceData.Name())
 }
@@ -123,14 +123,14 @@ func useTarFile(hdr *tar.Header, cleanPath string) bool {
 	return true
 }
 
-func analyzeTar(targzFile io.Reader) (*TarInfo, error) {
+func analyzeTar(targzFile io.Reader) (*tarInfo, error) {
 	tarFile, err := gzip.NewReader(targzFile)
 	if err != nil {
 		return nil, err
 	}
 	defer tarFile.Close()
 
-	files := make([]TarFileInfo, 0)
+	files := make([]tarFileInfo, 0)
 	infoByPath := make(map[string]int) // map from path to index in 'files'
 
 	rdr := tar.NewReader(tarFile)
@@ -157,13 +157,13 @@ func analyzeTar(targzFile io.Reader) (*TarInfo, error) {
 		}
 
 		h := sha1.New()
-		r := NewRollsum()
+		r := newRollsum()
 		w := io.MultiWriter(h, r)
 		if _, err := io.Copy(w, rdr); err != nil {
 			return nil, err
 		}
 
-		fileInfo := TarFileInfo{
+		fileInfo := tarFileInfo{
 			index:    index,
 			basename: path.Base(pathname),
 			path:     pathname,
@@ -180,13 +180,13 @@ func analyzeTar(targzFile io.Reader) (*TarInfo, error) {
 		return files[i].size < files[j].size
 	})
 
-	info := TarInfo{files: files}
+	info := tarInfo{files: files}
 	return &info, nil
 }
 
 // This is not called for files that can be used as-is, only for files that would
 // be diffed with bsdiff or rollsums
-func isDeltaCandidate(file *TarFileInfo) bool {
+func isDeltaCandidate(file *tarFileInfo) bool {
 	// Look for known non-delta-able files (currently just compression)
 	// NB: We explicitly don't have .gz here in case someone might be
 	// using --rsyncable for that.
@@ -198,7 +198,7 @@ func isDeltaCandidate(file *TarFileInfo) bool {
 	return true
 }
 
-func nameIsSimilar(a *TarFileInfo, b *TarFileInfo, fuzzy int) bool {
+func nameIsSimilar(a *tarFileInfo, b *tarFileInfo, fuzzy int) bool {
 	if fuzzy == 0 {
 		return a.basename == b.basename
 	} else {
@@ -208,7 +208,7 @@ func nameIsSimilar(a *TarFileInfo, b *TarFileInfo, fuzzy int) bool {
 	}
 }
 
-func extractDeltaData(tarGzFile io.Reader, sourceByIndex map[int]*SourceInfo, dest *os.File) error {
+func extractDeltaData(tarGzFile io.Reader, sourceByIndex map[int]*sourceInfo, dest *os.File) error {
 	offset := int64(0)
 
 	tarFile, err := gzip.NewReader(tarGzFile)
@@ -240,15 +240,15 @@ func extractDeltaData(tarGzFile io.Reader, sourceByIndex map[int]*SourceInfo, de
 	return nil
 }
 
-func analyzeForDelta(old *TarInfo, new *TarInfo, oldFile io.Reader) (*DeltaAnalysis, error) {
-	sourceInfos := make([]SourceInfo, 0, len(old.files))
+func analyzeForDelta(old *tarInfo, new *tarInfo, oldFile io.Reader) (*deltaAnalysis, error) {
+	sourceInfos := make([]sourceInfo, 0, len(old.files))
 	for i := range old.files {
-		sourceInfos = append(sourceInfos, SourceInfo{file: &old.files[i]})
+		sourceInfos = append(sourceInfos, sourceInfo{file: &old.files[i]})
 	}
 
-	sourceBySha1 := make(map[string]*SourceInfo)
-	sourceByPath := make(map[string]*SourceInfo)
-	sourceByIndex := make(map[int]*SourceInfo)
+	sourceBySha1 := make(map[string]*sourceInfo)
+	sourceByPath := make(map[string]*sourceInfo)
+	sourceByIndex := make(map[int]*sourceInfo)
 	for i := range sourceInfos {
 		s := &sourceInfos[i]
 		if !s.file.overwritten {
@@ -258,13 +258,13 @@ func analyzeForDelta(old *TarInfo, new *TarInfo, oldFile io.Reader) (*DeltaAnaly
 		}
 	}
 
-	targetInfos := make([]TargetInfo, 0, len(new.files))
+	targetInfos := make([]targetInfo, 0, len(new.files))
 
 	for i := range new.files {
 		file := &new.files[i]
 		// First look for exact content match
 		usedForDelta := false
-		var source *SourceInfo
+		var source *sourceInfo
 		sha1Source := sourceBySha1[file.sha1]
 		// If same sha1 and size, use original total size
 		if sha1Source != nil && file.size == sha1Source.file.size {
@@ -315,19 +315,19 @@ func analyzeForDelta(old *TarInfo, new *TarInfo, oldFile io.Reader) (*DeltaAnaly
 			}
 		}
 
-		var rollsumMatches *RollsumMatches
+		var rollsumMatches *rollsumMatches
 		if source != nil {
 			source.usedForDelta = usedForDelta
 
 			if usedForDelta {
-				rollsumMatches = ComputeRollsumMatches(source.file.blobs, file.blobs)
+				rollsumMatches = computeRollsumMatches(source.file.blobs, file.blobs)
 			}
 		}
-		info := TargetInfo{file: file, source: source, rollsumMatches: rollsumMatches}
+		info := targetInfo{file: file, source: source, rollsumMatches: rollsumMatches}
 		targetInfos = append(targetInfos, info)
 	}
 
-	targetInfoByIndex := make(map[int]*TargetInfo)
+	targetInfoByIndex := make(map[int]*targetInfo)
 	for i := range targetInfos {
 		t := &targetInfos[i]
 		targetInfoByIndex[t.file.index] = t
@@ -343,5 +343,5 @@ func analyzeForDelta(old *TarInfo, new *TarInfo, oldFile io.Reader) (*DeltaAnaly
 		return nil, err
 	}
 
-	return &DeltaAnalysis{targetInfos: targetInfos, targetInfoByIndex: targetInfoByIndex, sourceInfos: sourceInfos, sourceData: tmpfile}, nil
+	return &deltaAnalysis{targetInfos: targetInfos, targetInfoByIndex: targetInfoByIndex, sourceInfos: sourceInfos, sourceData: tmpfile}, nil
 }

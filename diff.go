@@ -16,34 +16,34 @@ const (
 	maxBsdiffSize = 64 * 1024 * 1024
 )
 
-type DeltaGenerator struct {
-	stealingTarFile *StealerReader
+type deltaGenerator struct {
+	stealingTarFile *stealerReader
 	tarReader       *tar.Reader
-	analysis        *DeltaAnalysis
-	deltaWriter     *DeltaWriter
+	analysis        *deltaAnalysis
+	deltaWriter     *deltaWriter
 }
 
 // Toggle whether reads from the source tarfile are copied into the delta, or skipped
-func (g *DeltaGenerator) setSkip(ignore bool) {
+func (g *deltaGenerator) setSkip(ignore bool) {
 	g.stealingTarFile.SetIgnore(ignore)
 }
 
 // Skip the rest of the current file from the tarfile
-func (g *DeltaGenerator) skipRest() error {
+func (g *deltaGenerator) skipRest() error {
 	g.setSkip(true)
 	_, err := io.Copy(ioutil.Discard, g.tarReader)
 	return err
 }
 
 // Skip the next n bytes of data from the current file in the tarfile
-func (g *DeltaGenerator) skipN(n int64) error {
+func (g *deltaGenerator) skipN(n int64) error {
 	g.setSkip(true)
 	_, err := io.CopyN(ioutil.Discard, g.tarReader, int64(n))
 	return err
 }
 
 // Read the next n bytes of data from the current file in the tarfile, not copying it to delta
-func (g *DeltaGenerator) readN(n int64) ([]byte, error) {
+func (g *deltaGenerator) readN(n int64) ([]byte, error) {
 	g.setSkip(true)
 	buf := make([]byte, n)
 	_, err := io.ReadFull(g.tarReader, buf)
@@ -51,28 +51,28 @@ func (g *DeltaGenerator) readN(n int64) ([]byte, error) {
 }
 
 // Copy the rest of the current file from the tarfile into the delta
-func (g *DeltaGenerator) copyRest() error {
+func (g *deltaGenerator) copyRest() error {
 	g.setSkip(false)
 	_, err := io.Copy(ioutil.Discard, g.tarReader)
 	return err
 }
 
 // Copy the next n bytes of the current file from the tarfile into the delta
-func (g *DeltaGenerator) copyN(n int64) error {
+func (g *deltaGenerator) copyN(n int64) error {
 	g.setSkip(false)
 	_, err := io.CopyN(ioutil.Discard, g.tarReader, int64(n))
 	return err
 }
 
 // Read back part of the stored data for the source file
-func (g *DeltaGenerator) readSourceData(source *SourceInfo, offset int64, size int64) ([]byte, error) {
+func (g *deltaGenerator) readSourceData(source *sourceInfo, offset int64, size int64) ([]byte, error) {
 	g.analysis.sourceData.Seek(int64(source.offset+offset), 0)
 	buf := make([]byte, size)
 	_, err := io.ReadFull(g.analysis.sourceData, buf)
 	return buf, err
 }
 
-func (g *DeltaGenerator) generateForFileWithBsdiff(info *TargetInfo) error {
+func (g *deltaGenerator) generateForFileWithBsdiff(info *targetInfo) error {
 	file := info.file
 	source := info.source
 
@@ -104,7 +104,7 @@ func (g *DeltaGenerator) generateForFileWithBsdiff(info *TargetInfo) error {
 	return nil
 }
 
-func (g *DeltaGenerator) generateForFileWithRollsums(info *TargetInfo) error {
+func (g *deltaGenerator) generateForFileWithrollsums(info *targetInfo) error {
 	file := info.file
 	source := info.source
 	matches := info.rollsumMatches.matches
@@ -157,7 +157,7 @@ func (g *DeltaGenerator) generateForFileWithRollsums(info *TargetInfo) error {
 	return nil
 }
 
-func (g *DeltaGenerator) generateForFile(info *TargetInfo) error {
+func (g *deltaGenerator) generateForFile(info *targetInfo) error {
 	file := info.file
 	sourceFile := info.source.file
 
@@ -177,7 +177,7 @@ func (g *DeltaGenerator) generateForFile(info *TargetInfo) error {
 		}
 	} else if info.rollsumMatches != nil && info.rollsumMatches.matchRatio > 20 {
 		// Use rollsums to generate delta
-		if err := g.generateForFileWithRollsums(info); err != nil {
+		if err := g.generateForFileWithrollsums(info); err != nil {
 			return err
 		}
 	} else {
@@ -188,23 +188,23 @@ func (g *DeltaGenerator) generateForFile(info *TargetInfo) error {
 	return nil
 }
 
-func generateDelta(newFile io.ReadSeeker, deltaFile io.Writer, analysis *DeltaAnalysis, compressionLevel int) error {
+func generateDelta(newFile io.ReadSeeker, deltaFile io.Writer, analysis *deltaAnalysis, compressionLevel int) error {
 	tarFile, err := gzip.NewReader(newFile)
 	if err != nil {
 		return err
 	}
 	defer tarFile.Close()
 
-	deltaWriter, err := NewDeltaWriter(deltaFile, compressionLevel)
+	deltaWriter, err := newDeltaWriter(deltaFile, compressionLevel)
 	if err != nil {
 		return err
 	}
 	defer deltaWriter.Close()
 
-	stealingTarFile := NewStealerReader(tarFile, deltaWriter)
+	stealingTarFile := newStealerReader(tarFile, deltaWriter)
 	tarReader := tar.NewReader(stealingTarFile)
 
-	g := &DeltaGenerator{
+	g := &deltaGenerator{
 		stealingTarFile: stealingTarFile,
 		tarReader:       tarReader,
 		analysis:        analysis,

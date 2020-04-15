@@ -22,13 +22,13 @@ const (
 	bupWindowSize = (1 << bupWindowBits)
 )
 
-type RollsumBlob struct {
+type rollsumBlob struct {
 	offset int64
 	size   int64
 	crc32  uint32
 }
 
-type Rollsum struct {
+type rollsum struct {
 	// Current blob
 	blobStart int64
 	blobSize  int64
@@ -41,32 +41,32 @@ type Rollsum struct {
 
 	// Resulting blobs
 	header []byte
-	blobs  []RollsumBlob
+	blobs  []rollsumBlob
 }
 
 // These formulas are based on rollsum.h in the librsync project.
-func (r *Rollsum) add(drop byte, add byte) {
+func (r *rollsum) add(drop byte, add byte) {
 	r.s1 += uint32(add) - uint32(drop)
 	r.s2 += r.s1 - (bupWindowSize * (uint32(drop) + bupCharOffset))
 }
 
-func (r *Rollsum) roll(ch byte) {
+func (r *rollsum) roll(ch byte) {
 	r.blobSize += 1
 	r.add(r.window[r.wofs], ch)
 	r.window[r.wofs] = ch
 	r.wofs = (r.wofs + 1) % bupWindowSize
 }
 
-func (r *Rollsum) digest() uint32 {
+func (r *rollsum) digest() uint32 {
 	return r.s1<<16 | r.s2&0xffff
 }
 
-func (r *Rollsum) shouldSplit() bool {
+func (r *rollsum) shouldSplit() bool {
 	return r.blobSize == maxBlobSize ||
 		(r.s2&(bupBlobSize-1)) == (^uint32(0)&(bupBlobSize-1))
 }
 
-func (r *Rollsum) init() {
+func (r *rollsum) init() {
 	r.blobStart = r.blobStart + r.blobSize
 	r.blobSize = 0
 	r.blobCrc = crc32.NewIEEE()
@@ -78,36 +78,36 @@ func (r *Rollsum) init() {
 	}
 }
 
-func (r *Rollsum) addBlob() {
-	blob := RollsumBlob{offset: r.blobStart, size: r.blobSize, crc32: r.blobCrc.Sum32()}
+func (r *rollsum) addBlob() {
+	blob := rollsumBlob{offset: r.blobStart, size: r.blobSize, crc32: r.blobCrc.Sum32()}
 	r.blobs = append(r.blobs, blob)
 	r.init()
 }
 
-func NewRollsum() *Rollsum {
-	r := new(Rollsum)
+func newRollsum() *rollsum {
+	r := new(rollsum)
 	r.header = make([]byte, 0, 16)
-	r.blobs = make([]RollsumBlob, 0)
+	r.blobs = make([]rollsumBlob, 0)
 	r.init()
 	return r
 }
 
-func (r *Rollsum) flush() {
+func (r *rollsum) flush() {
 	if r.blobSize > 0 {
 		r.addBlob()
 	}
 }
 
-func (r *Rollsum) GetBlobs() []RollsumBlob {
+func (r *rollsum) GetBlobs() []rollsumBlob {
 	r.flush()
 	return r.blobs
 }
 
-func (r *Rollsum) GetHeader() []byte {
+func (r *rollsum) GetHeader() []byte {
 	return r.header
 }
 
-func (r *Rollsum) Write(p []byte) (nn int, err error) {
+func (r *rollsum) Write(p []byte) (nn int, err error) {
 	nn = len(p)
 	if nn == 0 {
 		return
@@ -139,8 +139,8 @@ func (r *Rollsum) Write(p []byte) (nn int, err error) {
 	return
 }
 
-func makeCrcMap(blobs []RollsumBlob) map[uint32][]*RollsumBlob {
-	blobsMap := make(map[uint32][]*RollsumBlob)
+func makeCrcMap(blobs []rollsumBlob) map[uint32][]*rollsumBlob {
+	blobsMap := make(map[uint32][]*rollsumBlob)
 	for i := range blobs {
 		b := &blobs[i]
 
@@ -151,22 +151,22 @@ func makeCrcMap(blobs []RollsumBlob) map[uint32][]*RollsumBlob {
 	return blobsMap
 }
 
-type RollsumMatch struct {
-	from *RollsumBlob
-	to   *RollsumBlob
+type rollsumMatch struct {
+	from *rollsumBlob
+	to   *rollsumBlob
 }
-type RollsumMatches struct {
-	matches    []RollsumMatch
+type rollsumMatches struct {
+	matches    []rollsumMatch
 	matchRatio int
 	matchSize  int64
 }
 
-func ComputeRollsumMatches(from []RollsumBlob, to []RollsumBlob) *RollsumMatches {
+func computeRollsumMatches(from []rollsumBlob, to []rollsumBlob) *rollsumMatches {
 	fromByCrc := makeCrcMap(from)
 
 	nMatches := 0
 	matchSize := int64(0)
-	matches := make([]RollsumMatch, 0)
+	matches := make([]rollsumMatch, 0)
 
 	for i := range to {
 		t := &to[i]
@@ -182,7 +182,7 @@ func ComputeRollsumMatches(from []RollsumBlob, to []RollsumBlob) *RollsumMatches
 				// Size and crc matches, assume an exact hit but verify when actually computing delta
 				nMatches++
 				matchSize += f.size
-				matches = append(matches, RollsumMatch{f, t})
+				matches = append(matches, rollsumMatch{f, t})
 				break
 			}
 		}
@@ -192,7 +192,7 @@ func ComputeRollsumMatches(from []RollsumBlob, to []RollsumBlob) *RollsumMatches
 		return matches[i].to.offset < matches[j].to.offset
 	})
 
-	return &RollsumMatches{
+	return &rollsumMatches{
 		matches:    matches,
 		matchRatio: nMatches * 100 / len(to),
 		matchSize:  matchSize,
