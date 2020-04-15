@@ -1,28 +1,15 @@
 package tar_diff
 
 import (
-	"bufio"
-	"bytes"
 	"encoding/binary"
-	"fmt"
+	"github.com/alexlarsson/tar-diff/pkg/common"
 	"github.com/klauspost/compress/zstd"
 	"io"
-	"os"
-)
-
-const (
-	DeltaOpData    = iota
-	DeltaOpOpen    = iota
-	DeltaOpCopy    = iota
-	DeltaOpAddData = iota
-	DeltaOpSeek    = iota
 )
 
 const (
 	deltaDataChunkSize = 4 * 1024 * 1024
 )
-
-var deltaHeader = [...]byte{'t', 'a', 'r', 'd', 'f', '1', '\n', 0}
 
 type deltaWriter struct {
 	writer      *zstd.Encoder
@@ -32,7 +19,7 @@ type deltaWriter struct {
 }
 
 func newDeltaWriter(writer io.Writer, compressionLevel int) (*deltaWriter, error) {
-	_, err := writer.Write(deltaHeader[:])
+	_, err := writer.Write(common.DeltaHeader[:])
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +55,7 @@ func (d *deltaWriter) FlushBuffer() error {
 	if len(d.buffer) == 0 {
 		return nil
 	}
-	err := d.writeOp(DeltaOpData, uint64(len(d.buffer)), d.buffer)
+	err := d.writeOp(common.DeltaOpData, uint64(len(d.buffer)), d.buffer)
 	d.buffer = d.buffer[:0]
 	return err
 }
@@ -100,7 +87,7 @@ func (d *deltaWriter) SetCurrentFile(filename string) error {
 		if err != nil {
 			return err
 		}
-		err = d.writeOp(DeltaOpOpen, uint64(len(nameBytes)), nameBytes)
+		err = d.writeOp(common.DeltaOpOpen, uint64(len(nameBytes)), nameBytes)
 		if err != nil {
 			return err
 		}
@@ -121,7 +108,7 @@ func (d *deltaWriter) Seek(pos uint64) error {
 		return err
 	}
 
-	err = d.writeOp(DeltaOpSeek, pos, nil)
+	err = d.writeOp(common.DeltaOpSeek, pos, nil)
 	if err != nil {
 		return err
 	}
@@ -137,7 +124,7 @@ func (d *deltaWriter) SeekForward(pos uint64) error {
 		return err
 	}
 
-	err = d.writeOp(DeltaOpSeek, d.currentPos, nil)
+	err = d.writeOp(common.DeltaOpSeek, d.currentPos, nil)
 	if err != nil {
 		return err
 	}
@@ -150,7 +137,7 @@ func (d *deltaWriter) CopyFile(size uint64) error {
 		return err
 	}
 
-	err = d.writeOp(DeltaOpCopy, size, nil)
+	err = d.writeOp(common.DeltaOpCopy, size, nil)
 	if err != nil {
 		return err
 	}
@@ -165,7 +152,7 @@ func (d *deltaWriter) WriteAddContent(data []byte) error {
 	}
 
 	size := uint64(len(data))
-	err = d.writeOp(DeltaOpAddData, size, data)
+	err = d.writeOp(common.DeltaOpAddData, size, data)
 	if err != nil {
 		return err
 	}
@@ -202,113 +189,4 @@ func (d *deltaWriter) Write(data []byte) (int, error) {
 	n := len(data)
 	err := d.WriteContent(data)
 	return n, err
-}
-
-func maybeClose(closer io.Closer) {
-	closer.Close()
-}
-
-func ApplyDelta(delta io.Reader, extractedDir string, dst io.Writer) error {
-	buf := make([]byte, len(deltaHeader))
-	_, err := io.ReadFull(delta, buf)
-	if err != nil {
-		return err
-	}
-	if !bytes.Equal(buf, deltaHeader[:]) {
-		return fmt.Errorf("Invalid delta format")
-	}
-
-	decoder, err := zstd.NewReader(delta)
-	if err != nil {
-		return err
-	}
-	defer decoder.Close()
-
-	r := bufio.NewReader(decoder)
-
-	var currentFile *os.File
-	defer maybeClose(currentFile)
-
-	for {
-		op, err := r.ReadByte()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return err
-		}
-
-		size, err := binary.ReadUvarint(r)
-		if err != nil {
-			return err
-		}
-
-		switch op {
-		case DeltaOpData:
-			_, err = io.CopyN(dst, r, int64(size))
-			if err != nil {
-				return err
-			}
-		case DeltaOpOpen:
-			nameBytes := make([]byte, size)
-			_, err = io.ReadFull(r, nameBytes)
-			if err != nil {
-				return err
-			}
-			name := string(nameBytes)
-			path := extractedDir + "/" + name
-			if currentFile != nil {
-				currentFile.Close()
-			}
-			currentFile, err = os.Open(path)
-			if err != nil {
-				return err
-			}
-		case DeltaOpCopy:
-			if currentFile == nil {
-				return fmt.Errorf("No current file to copy from")
-			}
-
-			_, err = io.CopyN(dst, currentFile, int64(size))
-			if err != nil {
-				return err
-			}
-		case DeltaOpAddData:
-			if currentFile == nil {
-				return fmt.Errorf("No current file to copy from")
-			}
-
-			addBytes := make([]byte, size)
-			_, err = io.ReadFull(r, addBytes)
-			if err != nil {
-				return err
-			}
-
-			addBytes2 := make([]byte, size)
-			_, err = io.ReadFull(currentFile, addBytes2)
-			if err != nil {
-				return err
-			}
-
-			for i := uint64(0); i < size; i++ {
-				addBytes[i] = addBytes[i] + addBytes2[i]
-			}
-			if _, err := dst.Write(addBytes); err != nil {
-				return err
-			}
-
-		case DeltaOpSeek:
-			if currentFile == nil {
-				return fmt.Errorf("No current file to seek in")
-			}
-			_, err = currentFile.Seek(int64(size), 0)
-			if err != nil {
-				return err
-			}
-		default:
-			return fmt.Errorf("Unexpected delta op %d", op)
-		}
-	}
-
-	return nil
 }

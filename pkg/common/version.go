@@ -1,3 +1,3 @@
-package tar_diff
+package common
 
 var VERSION = "v0.1"

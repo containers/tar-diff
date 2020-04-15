@@ -3,7 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/alexlarsson/tar-diff"
+	"github.com/alexlarsson/tar-diff/pkg/common"
+	"github.com/alexlarsson/tar-diff/pkg/tar-diff"
 	"os"
 	"path"
 )
@@ -22,7 +23,7 @@ func main() {
 	flag.Parse()
 
 	if *version {
-		fmt.Printf("%s %s\n", path.Base(os.Args[0]), tar_diff.VERSION)
+		fmt.Printf("%s %s\n", path.Base(os.Args[0]), common.VERSION)
 		return
 	}
 

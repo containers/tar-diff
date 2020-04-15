@@ -3,7 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/alexlarsson/tar-diff"
+	"github.com/alexlarsson/tar-diff/pkg/common"
+	"github.com/alexlarsson/tar-diff/pkg/tar-patch"
 	"os"
 	"path"
 )
@@ -20,7 +21,7 @@ func main() {
 	flag.Parse()
 
 	if *version {
-		fmt.Printf("%s %s\n", path.Base(os.Args[0]), tar_diff.VERSION)
+		fmt.Printf("%s %s\n", path.Base(os.Args[0]), common.VERSION)
 		return
 	}
 
@@ -47,7 +48,7 @@ func main() {
 	}
 	defer patchedFile.Close()
 
-	err = tar_diff.ApplyDelta(deltaFile, extractedDir, patchedFile)
+	err = tar_patch.ApplyDelta(deltaFile, extractedDir, patchedFile)
 	if err != nil {
 		fmt.Fprintf(flag.CommandLine.Output(), "Error applying diff: %s\n", err)
 		os.Exit(1)
