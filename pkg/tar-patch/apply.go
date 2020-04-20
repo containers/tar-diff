@@ -13,6 +13,7 @@ import (
 
 type DataSource interface {
 	io.ReadSeeker
+	io.Closer
 	SetCurrentFile(file string) error
 }
 
