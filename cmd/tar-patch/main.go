@@ -34,6 +34,9 @@ func main() {
 	extractedDir := flag.Arg(1)
 	patchedFilename := flag.Arg(2)
 
+	dataSource := tar_patch.NewFilesystemDataSource(extractedDir)
+	defer dataSource.Close()
+
 	deltaFile, err := os.Open(deltaFilename)
 	if err != nil {
 		fmt.Fprintf(flag.CommandLine.Output(), "Unable to open %s: %s\n", deltaFilename, err)
@@ -48,7 +51,7 @@ func main() {
 	}
 	defer patchedFile.Close()
 
-	err = tar_patch.Apply(deltaFile, extractedDir, patchedFile)
+	err = tar_patch.Apply(deltaFile, dataSource, patchedFile)
 	if err != nil {
 		fmt.Fprintf(flag.CommandLine.Output(), "Error applying diff: %s\n", err)
 		os.Exit(1)

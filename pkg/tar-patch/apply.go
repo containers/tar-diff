@@ -11,11 +11,66 @@ import (
 	"os"
 )
 
-func maybeClose(closer io.Closer) {
-	closer.Close()
+type DataSource interface {
+	io.ReadSeeker
+	SetCurrentFile(file string) error
 }
 
-func Apply(delta io.Reader, extractedDir string, dst io.Writer) error {
+type FilesystemDataSource struct {
+	basePath    string
+	currentFile *os.File
+}
+
+func NewFilesystemDataSource(basePath string) *FilesystemDataSource {
+	return &FilesystemDataSource{
+		basePath:    basePath,
+		currentFile: nil,
+	}
+}
+
+func (f *FilesystemDataSource) Close() error {
+	if f.currentFile != nil {
+		err := f.currentFile.Close()
+		f.currentFile = nil
+
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (f *FilesystemDataSource) Read(data []byte) (n int, err error) {
+	if f.currentFile == nil {
+		return 0, fmt.Errorf("No current file set")
+	}
+	return f.currentFile.Read(data)
+}
+
+func (f *FilesystemDataSource) SetCurrentFile(file string) error {
+	if f.currentFile != nil {
+		err := f.currentFile.Close()
+		f.currentFile = nil
+		if err != nil {
+			return nil
+		}
+	}
+	currentFile, err := os.Open(f.basePath + "/" + file)
+	if err != nil {
+		return err
+	}
+	f.currentFile = currentFile
+	return nil
+}
+
+func (f *FilesystemDataSource) Seek(offset int64, whence int) (int64, error) {
+	if f.currentFile == nil {
+		return 0, fmt.Errorf("No current file set")
+	}
+	return f.currentFile.Seek(offset, whence)
+}
+
+func Apply(delta io.Reader, dataSource DataSource, dst io.Writer) error {
 	buf := make([]byte, len(common.DeltaHeader))
 	_, err := io.ReadFull(delta, buf)
 	if err != nil {
@@ -32,9 +87,6 @@ func Apply(delta io.Reader, extractedDir string, dst io.Writer) error {
 	defer decoder.Close()
 
 	r := bufio.NewReader(decoder)
-
-	var currentFile *os.File
-	defer maybeClose(currentFile)
 
 	for {
 		op, err := r.ReadByte()
@@ -63,28 +115,16 @@ func Apply(delta io.Reader, extractedDir string, dst io.Writer) error {
 				return err
 			}
 			name := string(nameBytes)
-			path := extractedDir + "/" + name
-			if currentFile != nil {
-				currentFile.Close()
-			}
-			currentFile, err = os.Open(path)
+			err := dataSource.SetCurrentFile(name)
 			if err != nil {
 				return err
 			}
 		case common.DeltaOpCopy:
-			if currentFile == nil {
-				return fmt.Errorf("No current file to copy from")
-			}
-
-			_, err = io.CopyN(dst, currentFile, int64(size))
+			_, err = io.CopyN(dst, dataSource, int64(size))
 			if err != nil {
 				return err
 			}
 		case common.DeltaOpAddData:
-			if currentFile == nil {
-				return fmt.Errorf("No current file to copy from")
-			}
-
 			addBytes := make([]byte, size)
 			_, err = io.ReadFull(r, addBytes)
 			if err != nil {
@@ -92,7 +132,7 @@ func Apply(delta io.Reader, extractedDir string, dst io.Writer) error {
 			}
 
 			addBytes2 := make([]byte, size)
-			_, err = io.ReadFull(currentFile, addBytes2)
+			_, err = io.ReadFull(dataSource, addBytes2)
 			if err != nil {
 				return err
 			}
@@ -105,10 +145,7 @@ func Apply(delta io.Reader, extractedDir string, dst io.Writer) error {
 			}
 
 		case common.DeltaOpSeek:
-			if currentFile == nil {
-				return fmt.Errorf("No current file to seek in")
-			}
-			_, err = currentFile.Seek(int64(size), 0)
+			_, err = dataSource.Seek(int64(size), 0)
 			if err != nil {
 				return err
 			}
