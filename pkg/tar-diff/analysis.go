@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
-	"sort"
 	"strings"
 )
 
@@ -28,7 +27,7 @@ type tarFileInfo struct {
 }
 
 type tarInfo struct {
-	files []tarFileInfo // Sorted by size, no size=0 files
+	files []tarFileInfo // no size=0 files
 }
 
 type targetInfo struct {
@@ -175,11 +174,6 @@ func analyzeTar(targzFile io.Reader) (*tarInfo, error) {
 		files = append(files, fileInfo)
 	}
 
-	// Sort, smallest files first
-	sort.Slice(files, func(i, j int) bool {
-		return files[i].size < files[j].size
-	})
-
 	info := tarInfo{files: files}
 	return &info, nil
 }
@@ -206,6 +200,20 @@ func nameIsSimilar(a *tarFileInfo, b *tarFileInfo, fuzzy int) bool {
 		bb := strings.SplitAfterN(b.basename, ".", 2)[0]
 		return aa == bb
 	}
+}
+
+// Check that two files are not wildly dissimilar in size.
+// This is to catch complete different version of the file, for example
+// replacing a binary with a shell wrapper
+func sizeIsSimilar(a *tarFileInfo, b *tarFileInfo) bool {
+	// For small files, we always think they are similar size
+	// There is no use considering a 5 byte and a 50 byte file
+	// wildly different
+	if a.size < 64*1024 && b.size < 64*1024 {
+		return true
+	}
+	// For larger files, we check that one is not a factor of 10 larger than the other
+	return a.size < 10*b.size && b.size < 10*a.size
 }
 
 func extractDeltaData(tarGzFile io.Reader, sourceByIndex map[int]*sourceInfo, dest *os.File) error {
@@ -240,6 +248,12 @@ func extractDeltaData(tarGzFile io.Reader, sourceByIndex map[int]*sourceInfo, de
 	return nil
 }
 
+func abs(n int64) int64 {
+	if n < 0 {
+		return -n
+	}
+	return n
+}
 func analyzeForDelta(old *tarInfo, new *tarInfo, oldFile io.Reader) (*deltaAnalysis, error) {
 	sourceInfos := make([]sourceInfo, 0, len(old.files))
 	for i := range old.files {
@@ -273,43 +287,36 @@ func analyzeForDelta(old *tarInfo, new *tarInfo, oldFile io.Reader) (*deltaAnaly
 		if source == nil && isDeltaCandidate(file) {
 			// No exact match, try to find a useful source
 
-			// If size is vastly different not useful to delta
-			minSize := file.size - file.size*similarityPercentThreshold/100
-			maxSize := file.size + file.size*similarityPercentThreshold/100
-
-			// First check by exact pathname match
 			s := sourceByPath[file.path]
 
-			if s != nil && isDeltaCandidate(s.file) && s.file.size >= minSize && s.file.size < maxSize {
+			if s != nil && isDeltaCandidate(s.file) && sizeIsSimilar(file, s.file) {
 				usedForDelta = true
 				source = s
 			} else {
 				// Check for moved (first) or renamed (second) versions
-				lower := 0
-				upper := len(sourceInfos)
 				for fuzzy := 0; fuzzy < 2 && source == nil; fuzzy++ {
-					for j := lower; j < upper; j++ {
+					for j := range sourceInfos {
 						s = &sourceInfos[j]
+
+						// Skip files that make no sense to delta (like compressed files)
 						if !isDeltaCandidate(s.file) {
 							continue
 						}
-
-						if s.file.size < minSize {
-							lower++
+						// We're looking for moved files, or renames to "similar names"
+						if !nameIsSimilar(file, s.file, fuzzy) {
 							continue
 						}
-
-						if s.file.size > maxSize {
-							break
+						// Skip files that are wildly dissimilar in size, such as binaries replaces by shellscripts
+						if !sizeIsSimilar(file, s.file) {
+							continue
 						}
-
-						if !nameIsSimilar(file, s.file, fuzzy) {
+						// Choose the matching source that have most similar size to the new file
+						if source != nil && abs(source.file.size-file.size) < abs(s.file.size-file.size) {
 							continue
 						}
 
 						usedForDelta = true
 						source = s
-						break
 					}
 				}
 			}
