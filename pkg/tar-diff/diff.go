@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	maxBsdiffSize = 64 * 1024 * 1024
+	defaultMaxBsdiffSize = 128 * 1024 * 1024
 )
 
 type deltaGenerator struct {
@@ -21,6 +21,7 @@ type deltaGenerator struct {
 	tarReader       *tar.Reader
 	analysis        *deltaAnalysis
 	deltaWriter     *deltaWriter
+	options         *Options
 }
 
 // Toggle whether reads from the source tarfile are copied into the delta, or skipped
@@ -161,6 +162,8 @@ func (g *deltaGenerator) generateForFile(info *targetInfo) error {
 	file := info.file
 	sourceFile := info.source.file
 
+	maxBsdiffSize := g.options.maxBsdiffSize
+
 	if sourceFile.sha1 == file.sha1 && sourceFile.size == file.size {
 		// Reuse exact file from old tar
 		if err := g.deltaWriter.WriteOldFile(sourceFile.path, uint64(sourceFile.size)); err != nil {
@@ -170,7 +173,7 @@ func (g *deltaGenerator) generateForFile(info *targetInfo) error {
 		if err := g.skipRest(); err != nil {
 			return err
 		}
-	} else if file.size < maxBsdiffSize && sourceFile.size < maxBsdiffSize {
+	} else if maxBsdiffSize == 0 || (file.size < maxBsdiffSize && sourceFile.size < maxBsdiffSize) {
 		// Use bsdiff to generate delta
 		if err := g.generateForFileWithBsdiff(info); err != nil {
 			return err
@@ -188,14 +191,14 @@ func (g *deltaGenerator) generateForFile(info *targetInfo) error {
 	return nil
 }
 
-func generateDelta(newFile io.ReadSeeker, deltaFile io.Writer, analysis *deltaAnalysis, compressionLevel int) error {
+func generateDelta(newFile io.ReadSeeker, deltaFile io.Writer, analysis *deltaAnalysis, options *Options) error {
 	tarFile, err := gzip.NewReader(newFile)
 	if err != nil {
 		return err
 	}
 	defer tarFile.Close()
 
-	deltaWriter, err := newDeltaWriter(deltaFile, compressionLevel)
+	deltaWriter, err := newDeltaWriter(deltaFile, options.compressionLevel)
 	if err != nil {
 		return err
 	}
@@ -209,6 +212,7 @@ func generateDelta(newFile io.ReadSeeker, deltaFile io.Writer, analysis *deltaAn
 		tarReader:       tarReader,
 		analysis:        analysis,
 		deltaWriter:     deltaWriter,
+		options:         options,
 	}
 
 	for index := 0; true; index++ {
@@ -249,15 +253,21 @@ func generateDelta(newFile io.ReadSeeker, deltaFile io.Writer, analysis *deltaAn
 
 type Options struct {
 	compressionLevel int
+	maxBsdiffSize    int64
 }
 
 func (o *Options) SetCompressionLevel(compressionLevel int) {
 	o.compressionLevel = compressionLevel
 }
 
+func (o *Options) SetMaxBsdiffFileSize(maxBsdiffSize int64) {
+	o.maxBsdiffSize = maxBsdiffSize
+}
+
 func NewOptions() *Options {
 	return &Options{
 		compressionLevel: 3,
+		maxBsdiffSize:    defaultMaxBsdiffSize,
 	}
 }
 
@@ -290,7 +300,7 @@ func Diff(oldTarFile io.ReadSeeker, newTarFile io.ReadSeeker, diffFile io.Writer
 	defer analysis.Close()
 
 	// Actually create the delta
-	if err := generateDelta(newTarFile, diffFile, analysis, options.compressionLevel); err != nil {
+	if err := generateDelta(newTarFile, diffFile, analysis, options); err != nil {
 		return err
 	}
 

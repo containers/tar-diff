@@ -10,7 +10,8 @@ import (
 )
 
 var version = flag.Bool("version", false, "Show version")
-var compressionLevel = flag.Int("compression-level", 3, "zstd compression level (default 3)")
+var compressionLevel = flag.Int("compression-level", 3, "zstd compression level")
+var maxBsdiffSize = flag.Int("max-bsdiff-size", 128, "Max file size in megabytes to consider using bsdiff, or 0 for no limit")
 
 func main() {
 
@@ -58,6 +59,7 @@ func main() {
 
 	options := tar_diff.NewOptions()
 	options.SetCompressionLevel(*compressionLevel)
+	options.SetMaxBsdiffFileSize(int64(*maxBsdiffSize) * 1024 * 1024)
 
 	err = tar_diff.Diff(oldFile, newFile, deltaFile, options)
 	if err != nil {
