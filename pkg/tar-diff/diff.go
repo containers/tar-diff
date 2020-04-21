@@ -7,9 +7,10 @@ package tar_diff
 import (
 	"archive/tar"
 	"bytes"
-	"compress/gzip"
 	"io"
 	"io/ioutil"
+
+	"github.com/containers/image/v5/pkg/compression"
 )
 
 const (
@@ -192,7 +193,7 @@ func (g *deltaGenerator) generateForFile(info *targetInfo) error {
 }
 
 func generateDelta(newFile io.ReadSeeker, deltaFile io.Writer, analysis *deltaAnalysis, options *Options) error {
-	tarFile, err := gzip.NewReader(newFile)
+	tarFile, _, err := compression.AutoDecompress(newFile)
 	if err != nil {
 		return err
 	}

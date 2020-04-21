@@ -2,7 +2,6 @@ package tar_diff
 
 import (
 	"archive/tar"
-	"compress/gzip"
 	"crypto/sha1"
 	"encoding/hex"
 	"io"
@@ -10,6 +9,8 @@ import (
 	"os"
 	"path"
 	"strings"
+
+	"github.com/containers/image/v5/pkg/compression"
 )
 
 const (
@@ -122,8 +123,8 @@ func useTarFile(hdr *tar.Header, cleanPath string) bool {
 	return true
 }
 
-func analyzeTar(targzFile io.Reader) (*tarInfo, error) {
-	tarFile, err := gzip.NewReader(targzFile)
+func analyzeTar(tarMaybeCompressed io.Reader) (*tarInfo, error) {
+	tarFile, _, err := compression.AutoDecompress(tarMaybeCompressed)
 	if err != nil {
 		return nil, err
 	}
@@ -216,10 +217,10 @@ func sizeIsSimilar(a *tarFileInfo, b *tarFileInfo) bool {
 	return a.size < 10*b.size && b.size < 10*a.size
 }
 
-func extractDeltaData(tarGzFile io.Reader, sourceByIndex map[int]*sourceInfo, dest *os.File) error {
+func extractDeltaData(tarMaybeCompressed io.Reader, sourceByIndex map[int]*sourceInfo, dest *os.File) error {
 	offset := int64(0)
 
-	tarFile, err := gzip.NewReader(tarGzFile)
+	tarFile, _, err := compression.AutoDecompress(tarMaybeCompressed)
 	if err != nil {
 		return err
 	}
