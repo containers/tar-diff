@@ -11,7 +11,7 @@ import (
 
 var version = flag.Bool("version", false, "Show version")
 var compressionLevel = flag.Int("compression-level", 3, "zstd compression level")
-var maxBsdiffSize = flag.Int("max-bsdiff-size", 128, "Max file size in megabytes to consider using bsdiff, or 0 for no limit")
+var maxBsdiffSize = flag.Int("max-bsdiff-size", 192, "Max file size in megabytes to consider using bsdiff, or 0 for no limit")
 
 func main() {
 

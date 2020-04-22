@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	defaultMaxBsdiffSize = 128 * 1024 * 1024
+	defaultMaxBsdiffSize = 192 * 1024 * 1024
 )
 
 type deltaGenerator struct {
