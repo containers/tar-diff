@@ -325,7 +325,7 @@ func analyzeForDelta(old *tarInfo, new *tarInfo, oldFile io.Reader) (*deltaAnaly
 
 		var rollsumMatches *rollsumMatches
 		if source != nil {
-			source.usedForDelta = usedForDelta
+			source.usedForDelta = source.usedForDelta || usedForDelta
 
 			if usedForDelta {
 				rollsumMatches = computeRollsumMatches(source.file.blobs, file.blobs)
