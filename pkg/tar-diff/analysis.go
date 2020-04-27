@@ -13,10 +13,6 @@ import (
 	"github.com/containers/image/v5/pkg/compression"
 )
 
-const (
-	similarityPercentThreshold = 30
-)
-
 type tarFileInfo struct {
 	index       int
 	basename    string

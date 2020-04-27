@@ -57,10 +57,6 @@ func (r *rollsum) roll(ch byte) {
 	r.wofs = (r.wofs + 1) % bupWindowSize
 }
 
-func (r *rollsum) digest() uint32 {
-	return r.s1<<16 | r.s2&0xffff
-}
-
 func (r *rollsum) shouldSplit() bool {
 	return r.blobSize == maxBlobSize ||
 		(r.s2&(bupBlobSize-1)) == (^uint32(0)&(bupBlobSize-1))
@@ -128,13 +124,16 @@ func (r *rollsum) Write(p []byte) (nn int, err error) {
 	for i := range p {
 		r.roll(p[i])
 		if r.shouldSplit() {
-			r.blobCrc.Write(p[start : i+1])
+			_, err = r.blobCrc.Write(p[start : i+1])
+			if err != nil {
+				return
+			}
 			start = i + 1
 			r.addBlob()
 		}
 	}
 	if start < nn {
-		r.blobCrc.Write(p[start:nn])
+		_, err = r.blobCrc.Write(p[start:nn])
 	}
 	return
 }

@@ -37,13 +37,6 @@ func (g *deltaGenerator) skipRest() error {
 	return err
 }
 
-// Skip the next n bytes of data from the current file in the tarfile
-func (g *deltaGenerator) skipN(n int64) error {
-	g.setSkip(true)
-	_, err := io.CopyN(ioutil.Discard, g.tarReader, int64(n))
-	return err
-}
-
 // Read the next n bytes of data from the current file in the tarfile, not copying it to delta
 func (g *deltaGenerator) readN(n int64) ([]byte, error) {
 	g.setSkip(true)
@@ -68,9 +61,12 @@ func (g *deltaGenerator) copyN(n int64) error {
 
 // Read back part of the stored data for the source file
 func (g *deltaGenerator) readSourceData(source *sourceInfo, offset int64, size int64) ([]byte, error) {
-	g.analysis.sourceData.Seek(int64(source.offset+offset), 0)
+	_, err := g.analysis.sourceData.Seek(int64(source.offset+offset), 0)
+	if err != nil {
+		return nil, err
+	}
 	buf := make([]byte, size)
-	_, err := io.ReadFull(g.analysis.sourceData, buf)
+	_, err = io.ReadFull(g.analysis.sourceData, buf)
 	return buf, err
 }
 
@@ -290,8 +286,14 @@ func Diff(oldTarFile io.ReadSeeker, newTarFile io.ReadSeeker, diffFile io.Writer
 	}
 
 	// Reset tar.gz for re-reading
-	oldTarFile.Seek(0, 0)
-	newTarFile.Seek(0, 0)
+	_, err = oldTarFile.Seek(0, 0)
+	if err != nil {
+		return err
+	}
+	_, err = newTarFile.Seek(0, 0)
+	if err != nil {
+		return err
+	}
 
 	// Compare new and old for delta information
 	analysis, err := analyzeForDelta(oldInfo, newInfo, oldTarFile)
