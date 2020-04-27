@@ -1,0 +1,12 @@
+container:
+  image: fedora:32
+
+env:
+  GOPROXY: https://proxy.golang.org
+  GOPATH: "/var/tmp/go"
+  PATH: "${PATH}:${GOPATH}/bin"
+
+build_and_test_task:
+  build_and_test_script:
+    - dnf install -y golang make tar diffutils bzip2 which
+    - make
