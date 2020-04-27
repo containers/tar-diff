@@ -1,4 +1,4 @@
-.PHONY: all build clean fmt install lint test tools validate .install.gitvalidation .install.golangci-lint .gitvalidation
+.PHONY: all build clean fmt install lint test tools unit-test integration-test validate .install.gitvalidation .install.golangci-lint .gitvalidation
 
 export GOPROXY=https://proxy.golang.org
 
@@ -48,8 +48,13 @@ tools: .install.gitvalidation .install.golangci-lint
 clean:
 	rm -f tar-diff tar-patch
 
-test:
+integration-test: tar-diff tar-patch
+	tests/test.sh
+
+unit-test:
 	GO111MODULE="on" go test $(BUILDFLAGS) -cover ./...
+
+test: unit-test integration-test
 
 fmt:
 	@gofmt -l -s -w $(SOURCE_DIRS)
