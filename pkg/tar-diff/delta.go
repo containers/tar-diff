@@ -2,7 +2,7 @@ package tar_diff
 
 import (
 	"encoding/binary"
-	"github.com/alexlarsson/tar-diff/pkg/common"
+	"github.com/containers/tar-diff/pkg/common"
 	"github.com/klauspost/compress/zstd"
 	"io"
 )

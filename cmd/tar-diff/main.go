@@ -3,8 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/alexlarsson/tar-diff/pkg/common"
-	"github.com/alexlarsson/tar-diff/pkg/tar-diff"
+	"github.com/containers/tar-diff/pkg/common"
+	"github.com/containers/tar-diff/pkg/tar-diff"
 	"os"
 	"path"
 )

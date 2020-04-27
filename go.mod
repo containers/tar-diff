@@ -1,4 +1,4 @@
-module github.com/alexlarsson/tar-diff
+module github.com/containers/tar-diff
 
 go 1.14
 
