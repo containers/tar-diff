@@ -9,6 +9,7 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"io"
 	"os"
+	"path"
 )
 
 type DataSource interface {
@@ -20,6 +21,17 @@ type DataSource interface {
 type FilesystemDataSource struct {
 	basePath    string
 	currentFile *os.File
+}
+
+// Cleans up the path lexically
+// Any ".." that extends outside the first elements (or the root itself) is invalid and returns ""
+func cleanPath(pathName string) string {
+	// We make the path always absolute, that way path.Clean() ensure it never goes outside the top ("root") dir
+	// even if its a relative path
+	clean := path.Clean("/" + pathName)
+
+	// We clean the initial slash, making all result relative (or "" which is error)
+	return clean[1:]
 }
 
 func NewFilesystemDataSource(basePath string) *FilesystemDataSource {
@@ -116,7 +128,11 @@ func Apply(delta io.Reader, dataSource DataSource, dst io.Writer) error {
 				return err
 			}
 			name := string(nameBytes)
-			err := dataSource.SetCurrentFile(name)
+			cleanName := cleanPath(name)
+			if len(cleanName) == 0 {
+				return fmt.Errorf("Invalid source name '%v' in tar-diff", name)
+			}
+			err := dataSource.SetCurrentFile(cleanName)
 			if err != nil {
 				return err
 			}
