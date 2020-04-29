@@ -44,12 +44,19 @@ func main() {
 	}
 	defer deltaFile.Close()
 
-	patchedFile, err := os.Create(patchedFilename)
-	if err != nil {
-		fmt.Fprintf(flag.CommandLine.Output(), "Unable to create %s: %s\n", patchedFilename, err)
-		os.Exit(1)
+	var patchedFile *os.File
+
+	if patchedFilename == "-" {
+		patchedFile = os.Stdout
+	} else {
+		var err error
+		patchedFile, err = os.Create(patchedFilename)
+		if err != nil {
+			fmt.Fprintf(flag.CommandLine.Output(), "Unable to create %s: %s\n", patchedFilename, err)
+			os.Exit(1)
+		}
+		defer patchedFile.Close()
 	}
-	defer patchedFile.Close()
 
 	err = tar_patch.Apply(deltaFile, dataSource, patchedFile)
 	if err != nil {
