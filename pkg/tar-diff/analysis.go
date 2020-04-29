@@ -63,28 +63,15 @@ func isSparseFile(hdr *tar.Header) bool {
 	return false
 }
 
-// Makes absolute paths relative, removes "/./" and "//" elements and resolves "/../" element inside the path
-// Any ".." that extends outside the first elements is invalid and returns ""
-func cleanPath(path string) string {
-	elements := strings.Split(path, "/")
-	res := make([]string, 0, len(elements))
+// Cleans up the path lexically
+// Any ".." that extends outside the first elements (or the root itself) is invalid and returns ""
+func cleanPath(pathName string) string {
+	// We make the path always absolute, that way path.Clean() ensure it never goes outside the top ("root") dir
+	// even if its a relative path
+	clean := path.Clean("/" + pathName)
 
-	for i := range elements {
-		element := elements[i]
-		if element == "" {
-			continue // Skip "//" style elements, or first /
-		} else if element == "." {
-			continue // Skip "/./" style elements
-		} else if element == ".." {
-			if len(res) == 0 {
-				return "" // .. goes outside root, invalid
-			}
-			res = res[:len(res)-1]
-		} else {
-			res = append(res, element)
-		}
-	}
-	return strings.Join(res, "/")
+	// We clean the initial slash, making all result relative (or "" which is error)
+	return clean[1:]
 }
 
 // Ignore all the files that make no sense to either delta or re-use as is
