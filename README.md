@@ -23,6 +23,8 @@ to reconstruct and validate the current version of the image.
 
 Delta compression is based on [bsdiff](http://www.daemonology.net/bsdiff/) and [zstd compression](https://facebook.github.io/zstd/).
 
+The tar-diff file-format is described in [file-format.md](file-format.md)
+
 License
 -
 tar-diff is licensed under the Apache License, Version 2.0. See
