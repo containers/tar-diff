@@ -21,6 +21,8 @@ These images are typically transferred as compressed tar files, but the content 
 the uncomressed content. This makes it possible to use an extracted earlier version of and image in combination with a tardiff
 to reconstruct and validate the current version of the image.
 
+Delta compression is based on [bsdiff](http://www.daemonology.net/bsdiff/) and [zstd compression](https://facebook.github.io/zstd/).
+
 License
 -
 tar-diff is licensed under the Apache License, Version 2.0. See
