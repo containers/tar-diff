@@ -18,7 +18,7 @@ $ shasum reconstructed.tar
 
 The main usecase for tar-diff is for more efficient distribution of [OCI images](https://github.com/opencontainers/image-spec).
 These images are typically transferred as compressed tar files, but the content is refered to and validated by the checksum of
-the uncomressed content. This makes it possible to use an extracted earlier version of and image in combination with a tardiff
+the uncompressed content. This makes it possible to use an extracted earlier version of an image in combination with a tardiff
 to reconstruct and validate the current version of the image.
 
 Delta compression is based on [bsdiff](http://www.daemonology.net/bsdiff/) and [zstd compression](https://facebook.github.io/zstd/).
