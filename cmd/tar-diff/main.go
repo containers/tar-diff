@@ -16,7 +16,7 @@ var maxBsdiffSize = flag.Int("max-bsdiff-size", 192, "Max file size in megabytes
 func main() {
 
 	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [OPION] old.tar.gz new.tar.gz result.tardiff\n", path.Base(os.Args[0]))
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [OPTION] old.tar.gz new.tar.gz result.tardiff\n", path.Base(os.Args[0]))
 		fmt.Fprintf(flag.CommandLine.Output(), "Options:\n")
 		flag.PrintDefaults()
 	}

@@ -13,7 +13,7 @@ var version = flag.Bool("version", false, "Show version")
 
 func main() {
 	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [OPION] file.tardiff /path/to/content destination.tar\n", path.Base(os.Args[0]))
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [OPTION] file.tardiff /path/to/content destination.tar\n", path.Base(os.Args[0]))
 		fmt.Fprintf(flag.CommandLine.Output(), "Options:\n")
 		flag.PrintDefaults()
 	}
