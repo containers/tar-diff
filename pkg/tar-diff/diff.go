@@ -70,7 +70,7 @@ func (g *deltaGenerator) generateForFileWithBsdiff(info *targetInfo) error {
 	file := info.file
 	source := info.source
 
-	err := g.deltaWriter.SetCurrentFile(source.file.path)
+	err := g.deltaWriter.SetCurrentFile(source.file.paths[0])
 	if err != nil {
 		return err
 	}
@@ -104,7 +104,7 @@ func (g *deltaGenerator) generateForFileWithrollsums(info *targetInfo) error {
 	matches := info.rollsumMatches.matches
 	pos := int64(0)
 
-	err := g.deltaWriter.SetCurrentFile(source.file.path)
+	err := g.deltaWriter.SetCurrentFile(source.file.paths[0])
 	if err != nil {
 		return err
 	}
@@ -160,7 +160,7 @@ func (g *deltaGenerator) generateForFile(info *targetInfo) error {
 	switch {
 	case sourceFile.sha1 == file.sha1 && sourceFile.size == file.size:
 		// Reuse exact file from old tar
-		if err := g.deltaWriter.WriteOldFile(sourceFile.path, uint64(sourceFile.size)); err != nil {
+		if err := g.deltaWriter.WriteOldFile(sourceFile.paths[0], uint64(sourceFile.size)); err != nil {
 			return err
 		}
 

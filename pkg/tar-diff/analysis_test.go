@@ -214,3 +214,125 @@ func TestAnalyzeForDelta_HardlinksInTargetInfo(t *testing.T) {
 		t.Errorf("Expected linkname 'file.txt', got %q", hlInfo.hardlink.linkname)
 	}
 }
+
+func TestAnalyzeTar_HardlinksAddMultiplePaths(t *testing.T) {
+	entries := []tarEntry{
+		{name: "blobs/sha256/abc123", typeflag: tar.TypeReg, data: []byte("content")},
+		{name: "real/file.txt", typeflag: tar.TypeLink, linkname: "blobs/sha256/abc123"},
+		{name: "other/link.txt", typeflag: tar.TypeLink, linkname: "blobs/sha256/abc123"},
+	}
+	tarFile, err := createTestTar(entries)
+	if err != nil {
+		t.Fatalf("Failed to create test tar: %v", err)
+	}
+
+	info, err := analyzeTar(tarFile)
+	if err != nil {
+		t.Fatalf("analyzeTar failed: %v", err)
+	}
+
+	if len(info.files) != 1 {
+		t.Fatalf("Expected 1 file, got %d", len(info.files))
+	}
+
+	file := &info.files[0]
+
+	expectedPaths := []string{"blobs/sha256/abc123", "real/file.txt", "other/link.txt"}
+	if len(file.paths) != len(expectedPaths) {
+		t.Fatalf("Expected %d paths, got %d", len(expectedPaths), len(file.paths))
+	}
+	for i, expected := range expectedPaths {
+		if file.paths[i] != expected {
+			t.Errorf("Path %d: expected %q, got %q", i, expected, file.paths[i])
+		}
+	}
+
+	expectedBasenames := []string{"abc123", "file.txt", "link.txt"}
+	if len(file.basenames) != len(expectedBasenames) {
+		t.Fatalf("Expected %d basenames, got %d", len(expectedBasenames), len(file.basenames))
+	}
+	for i, expected := range expectedBasenames {
+		if file.basenames[i] != expected {
+			t.Errorf("Basename %d: expected %q, got %q", i, expected, file.basenames[i])
+		}
+	}
+}
+
+func TestAnalyzeForDelta_MatchViaHardlinkPath(t *testing.T) {
+	// Old tar: file with sha256 name and real name hardlink
+	oldEntries := []tarEntry{
+		{name: "blobs/sha256/abc123", typeflag: tar.TypeReg, data: []byte("version 1 content")},
+		{name: "real/file.txt", typeflag: tar.TypeLink, linkname: "blobs/sha256/abc123"},
+	}
+	oldTar, err := createTestTar(oldEntries)
+	if err != nil {
+		t.Fatalf("Failed to create old tar: %v", err)
+	}
+
+	// New tar: file with different sha256 name but same real name
+	newEntries := []tarEntry{
+		{name: "blobs/sha256/def456", typeflag: tar.TypeReg, data: []byte("version 2 content")},
+		{name: "real/file.txt", typeflag: tar.TypeLink, linkname: "blobs/sha256/def456"},
+	}
+	newTar, err := createTestTar(newEntries)
+	if err != nil {
+		t.Fatalf("Failed to create new tar: %v", err)
+	}
+
+	if _, err := oldTar.Seek(0, 0); err != nil {
+		t.Fatalf("oldTar.Seek: %v", err)
+	}
+	if _, err := newTar.Seek(0, 0); err != nil {
+		t.Fatalf("newTar.Seek: %v", err)
+	}
+
+	oldInfo, err := analyzeTar(oldTar)
+	if err != nil {
+		t.Fatalf("analyzeTar (old) failed: %v", err)
+	}
+
+	newInfo, err := analyzeTar(newTar)
+	if err != nil {
+		t.Fatalf("analyzeTar (new) failed: %v", err)
+	}
+
+	if _, err := oldTar.Seek(0, 0); err != nil {
+		t.Fatalf("oldTar.Seek: %v", err)
+	}
+
+	analysis, err := analyzeForDelta(oldInfo, newInfo, oldTar)
+	if err != nil {
+		t.Fatalf("analyzeForDelta failed: %v", err)
+	}
+	defer func() {
+		if err := analysis.Close(); err != nil {
+			t.Fatalf("analysis.Close failed: %v", err)
+		}
+	}()
+
+	// The new file should have matched the old file via the "real/file.txt" path
+	targetInfo := &analysis.targetInfos[0]
+	if targetInfo.source == nil {
+		t.Fatal("Expected target file to find a source match")
+	}
+
+	// The source should be the old file (which has "real/file.txt" as one of its paths)
+	if len(targetInfo.source.file.paths) < 2 {
+		t.Fatal("Expected source file to have multiple paths")
+	}
+	foundRealPath := false
+	for _, p := range targetInfo.source.file.paths {
+		if p == "real/file.txt" {
+			foundRealPath = true
+			break
+		}
+	}
+	if !foundRealPath {
+		t.Error("Expected source file to have 'real/file.txt' in its paths")
+	}
+
+	// The primary path (paths[0]) should be the sha256 path (first regular file entry)
+	if targetInfo.source.file.paths[0] != "blobs/sha256/abc123" {
+		t.Errorf("Expected primary source path to be 'blobs/sha256/abc123', got %q", targetInfo.source.file.paths[0])
+	}
+}

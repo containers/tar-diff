@@ -16,9 +16,10 @@ import (
 )
 
 type tarFileInfo struct {
-	index       int
-	basename    string
-	path        string
+	index int
+	// Hardlinked files have multiple names/basenames
+	basenames   []string
+	paths       []string
 	size        int64
 	sha1        string
 	blobs       []rollsumBlob
@@ -177,15 +178,24 @@ func analyzeTar(tarMaybeCompressed io.Reader) (*tarInfo, error) {
 		}
 
 		fileInfo := tarFileInfo{
-			index:    index,
-			basename: path.Base(pathname),
-			path:     pathname,
-			size:     hdr.Size,
-			sha1:     hex.EncodeToString(h.Sum(nil)),
-			blobs:    r.GetBlobs(),
+			index:     index,
+			basenames: []string{path.Base(pathname)},
+			paths:     []string{pathname},
+			size:      hdr.Size,
+			sha1:      hex.EncodeToString(h.Sum(nil)),
+			blobs:     r.GetBlobs(),
 		}
 		infoByPath[pathname] = len(files)
 		files = append(files, fileInfo)
+	}
+
+	// Add hardlink paths and basenames to their target files
+	for i := range hardlinks {
+		hl := &hardlinks[i]
+		if fileIndex, ok := infoByPath[hl.linkname]; ok {
+			files[fileIndex].paths = append(files[fileIndex].paths, hl.path)
+			files[fileIndex].basenames = append(files[fileIndex].basenames, path.Base(hl.path))
+		}
 	}
 
 	info := tarInfo{files: files, hardlinks: hardlinks}
@@ -198,21 +208,33 @@ func isDeltaCandidate(file *tarFileInfo) bool {
 	// Look for known non-delta-able files (currently just compression)
 	// NB: We explicitly don't have .gz here in case someone might be
 	// using --rsyncable for that.
-	if strings.HasPrefix(file.basename, ".xz") ||
-		strings.HasPrefix(file.basename, ".bz2") {
-		return false
+	for _, basename := range file.basenames {
+		if strings.HasPrefix(basename, ".xz") ||
+			strings.HasPrefix(basename, ".bz2") {
+			return false
+		}
 	}
 
 	return true
 }
 
 func nameIsSimilar(a *tarFileInfo, b *tarFileInfo, fuzzy int) bool {
-	if fuzzy == 0 {
-		return a.basename == b.basename
+	for _, aBasename := range a.basenames {
+		for _, bBasename := range b.basenames {
+			if fuzzy == 0 {
+				if aBasename == bBasename {
+					return true
+				}
+			} else {
+				aa := strings.SplitAfterN(aBasename, ".", 2)[0]
+				bb := strings.SplitAfterN(bBasename, ".", 2)[0]
+				if aa == bb {
+					return true
+				}
+			}
+		}
 	}
-	aa := strings.SplitAfterN(a.basename, ".", 2)[0]
-	bb := strings.SplitAfterN(b.basename, ".", 2)[0]
-	return aa == bb
+	return false
 }
 
 // Check that two files are not wildly dissimilar in size.
@@ -283,7 +305,9 @@ func analyzeForDelta(old *tarInfo, newTar *tarInfo, oldFile io.Reader) (*deltaAn
 		s := &sourceInfos[i]
 		if !s.file.overwritten {
 			sourceBySha1[s.file.sha1] = s
-			sourceByPath[s.file.path] = s
+			for _, p := range s.file.paths {
+				sourceByPath[p] = s
+			}
 			sourceByIndex[s.file.index] = s
 		}
 	}
@@ -303,7 +327,14 @@ func analyzeForDelta(old *tarInfo, newTar *tarInfo, oldFile io.Reader) (*deltaAn
 		if source == nil && isDeltaCandidate(file) {
 			// No exact match, try to find a useful source
 
-			s := sourceByPath[file.path]
+			// Check if any of the target file's paths match a source file
+			var s *sourceInfo
+			for _, p := range file.paths {
+				if matchedSource := sourceByPath[p]; matchedSource != nil {
+					s = matchedSource
+					break
+				}
+			}
 
 			if s != nil && isDeltaCandidate(s.file) && sizeIsSimilar(file, s.file) {
 				usedForDelta = true
