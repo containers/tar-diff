@@ -46,9 +46,10 @@ type targetInfo struct {
 }
 
 type sourceInfo struct {
-	file         *tarFileInfo
-	usedForDelta bool
-	offset       int64
+	file               *tarFileInfo
+	usedForDelta       bool
+	offset             int64
+	sourceTarFileIndex int
 }
 
 type deltaAnalysis struct {
@@ -251,35 +252,42 @@ func sizeIsSimilar(a *tarFileInfo, b *tarFileInfo) bool {
 	return a.size < 10*b.size && b.size < 10*a.size
 }
 
-func extractDeltaData(tarMaybeCompressed io.Reader, sourceByIndex map[int]*sourceInfo, dest *os.File) error {
+type indexKey struct {
+	fileIndex  int
+	entryIndex int
+}
+
+func extractDeltaData(tarMaybeCompressedFiles []io.ReadSeeker, sourceByIndex map[indexKey]*sourceInfo, dest *os.File) error {
 	offset := int64(0)
 
-	tarFile, _, err := compression.AutoDecompress(tarMaybeCompressed)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err := tarFile.Close(); err != nil {
-			log.Printf("close tar file: %v", err)
-		}
-	}()
-
-	rdr := tar.NewReader(tarFile)
-	for index := 0; true; index++ {
-		var hdr *tar.Header
-		hdr, err = rdr.Next()
+	for fileIndex, tarMaybeCompressed := range tarMaybeCompressedFiles {
+		tarFile, _, err := compression.AutoDecompress(tarMaybeCompressed)
 		if err != nil {
-			if err == io.EOF {
-				break // Expected error
-			}
 			return err
 		}
-		info := sourceByIndex[index]
-		if info != nil && info.usedForDelta {
-			info.offset = offset
-			offset += hdr.Size
-			if _, err := io.Copy(dest, rdr); err != nil {
+		defer func() {
+			if err := tarFile.Close(); err != nil {
+				log.Printf("close tar file: %v", err)
+			}
+		}()
+
+		rdr := tar.NewReader(tarFile)
+		for index := 0; true; index++ {
+			var hdr *tar.Header
+			hdr, err = rdr.Next()
+			if err != nil {
+				if err == io.EOF {
+					break // Expected error
+				}
 				return err
+			}
+			info := sourceByIndex[indexKey{fileIndex: fileIndex, entryIndex: index}]
+			if info != nil && info.usedForDelta {
+				info.offset = offset
+				offset += hdr.Size
+				if _, err := io.Copy(dest, rdr); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -292,15 +300,42 @@ func abs(n int64) int64 {
 	}
 	return n
 }
-func analyzeForDelta(old *tarInfo, newTar *tarInfo, oldFile io.Reader) (*deltaAnalysis, error) {
-	sourceInfos := make([]sourceInfo, 0, len(old.files))
-	for i := range old.files {
-		sourceInfos = append(sourceInfos, sourceInfo{file: &old.files[i]})
+
+func buildSourceInfos(oldInfos []*tarInfo) []sourceInfo {
+	sourceInfos := make([]sourceInfo, 0)
+	pathToFileIndex := make(map[string]int)
+
+	for fileIdx, oldInfo := range oldInfos {
+		for i := range oldInfo.files {
+			file := &oldInfo.files[i]
+
+			// Check if any path from this file conflicts with existing files
+			for _, p := range file.paths {
+				if existingIdx, exists := pathToFileIndex[p]; exists {
+					sourceInfos[existingIdx].file.overwritten = true
+				}
+			}
+
+			// Add the primary path of this file (which is the one used as delta source)
+			currentFileIndex := len(sourceInfos)
+			pathToFileIndex[file.paths[0]] = currentFileIndex
+
+			sourceInfos = append(sourceInfos, sourceInfo{
+				file:               file,
+				sourceTarFileIndex: fileIdx,
+			})
+		}
 	}
+
+	return sourceInfos
+}
+
+func analyzeForDelta(oldInfos []*tarInfo, newTar *tarInfo, oldFiles []io.ReadSeeker) (*deltaAnalysis, error) {
+	sourceInfos := buildSourceInfos(oldInfos)
 
 	sourceBySha1 := make(map[string]*sourceInfo)
 	sourceByPath := make(map[string]*sourceInfo)
-	sourceByIndex := make(map[int]*sourceInfo)
+	sourceByIndex := make(map[indexKey]*sourceInfo)
 	for i := range sourceInfos {
 		s := &sourceInfos[i]
 		if !s.file.overwritten {
@@ -308,7 +343,7 @@ func analyzeForDelta(old *tarInfo, newTar *tarInfo, oldFile io.Reader) (*deltaAn
 			for _, p := range s.file.paths {
 				sourceByPath[p] = s
 			}
-			sourceByIndex[s.file.index] = s
+			sourceByIndex[indexKey{fileIndex: s.sourceTarFileIndex, entryIndex: s.file.index}] = s
 		}
 	}
 
@@ -399,7 +434,7 @@ func analyzeForDelta(old *tarInfo, newTar *tarInfo, oldFile io.Reader) (*deltaAn
 		return nil, err
 	}
 
-	err = extractDeltaData(oldFile, sourceByIndex, tmpfile)
+	err = extractDeltaData(oldFiles, sourceByIndex, tmpfile)
 	if err != nil {
 		_ = os.Remove(tmpfile.Name())
 		return nil, err

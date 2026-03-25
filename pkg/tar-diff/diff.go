@@ -3,6 +3,7 @@ package tardiff
 import (
 	"archive/tar"
 	"bytes"
+	"fmt"
 	"io"
 	"log"
 
@@ -281,17 +282,26 @@ func NewOptions() *Options {
 	}
 }
 
-// Diff creates a binary difference between two tar archives.
-func Diff(oldTarFile io.ReadSeeker, newTarFile io.ReadSeeker, diffFile io.Writer, options *Options) error {
+// Diff creates a binary difference between a set of tar archives and a new tar archive
+// oldTarFiles contains one or more old tar files, in extraction order
+func Diff(oldTarFiles []io.ReadSeeker, newTarFile io.ReadSeeker, diffFile io.Writer, options *Options) error {
 
 	if options == nil {
 		options = NewOptions()
 	}
 
-	// First analyze both tarfiles by themselves
-	oldInfo, err := analyzeTar(oldTarFile)
-	if err != nil {
-		return err
+	if len(oldTarFiles) == 0 {
+		return fmt.Errorf("at least one old tar file is required")
+	}
+
+	// First analyze all tarfiles by themselves
+	oldInfos := make([]*tarInfo, len(oldTarFiles))
+	for i, oldTarFile := range oldTarFiles {
+		oldInfo, err := analyzeTar(oldTarFile)
+		if err != nil {
+			return err
+		}
+		oldInfos[i] = oldInfo
 	}
 
 	newInfo, err := analyzeTar(newTarFile)
@@ -300,9 +310,11 @@ func Diff(oldTarFile io.ReadSeeker, newTarFile io.ReadSeeker, diffFile io.Writer
 	}
 
 	// Reset tar.gz for re-reading
-	_, err = oldTarFile.Seek(0, 0)
-	if err != nil {
-		return err
+	for _, oldTarFile := range oldTarFiles {
+		_, err = oldTarFile.Seek(0, 0)
+		if err != nil {
+			return err
+		}
 	}
 	_, err = newTarFile.Seek(0, 0)
 	if err != nil {
@@ -310,7 +322,7 @@ func Diff(oldTarFile io.ReadSeeker, newTarFile io.ReadSeeker, diffFile io.Writer
 	}
 
 	// Compare new and old for delta information
-	analysis, err := analyzeForDelta(oldInfo, newInfo, oldTarFile)
+	analysis, err := analyzeForDelta(oldInfos, newInfo, oldTarFiles)
 	if err != nil {
 		return err
 	}

@@ -3,6 +3,7 @@ package tardiff
 import (
 	"archive/tar"
 	"bytes"
+	"io"
 	"testing"
 )
 
@@ -47,7 +48,7 @@ func TestGenerateDelta_Hardlinks(t *testing.T) {
 	if _, err := oldTar.Seek(0, 0); err != nil {
 		t.Fatalf("oldTar.Seek: %v", err)
 	}
-	analysis, err := analyzeForDelta(oldInfo, newInfo, oldTar)
+	analysis, err := analyzeForDelta([]*tarInfo{oldInfo}, newInfo, []io.ReadSeeker{oldTar})
 	if err != nil {
 		t.Fatalf("analyzeForDelta failed: %v", err)
 	}
@@ -135,7 +136,7 @@ func TestGenerateDelta_MixedHardlinksAndDuplicates(t *testing.T) {
 	if _, err := oldTar.Seek(0, 0); err != nil {
 		t.Fatalf("oldTar.Seek: %v", err)
 	}
-	analysis, err := analyzeForDelta(oldInfo, newInfo, oldTar)
+	analysis, err := analyzeForDelta([]*tarInfo{oldInfo}, newInfo, []io.ReadSeeker{oldTar})
 	if err != nil {
 		t.Fatalf("analyzeForDelta failed: %v", err)
 	}

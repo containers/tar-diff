@@ -2,9 +2,9 @@
 
 `tar-diff` is a golang library and set of commandline tools to diff and patch tar files.
 
-`pkg/tar-diff` and the `tar-diff` tool take two (optionally compressed) tar files and generate a single file representing the delta between them (a tardiff file).
+`pkg/tar-diff` and the `tar-diff` tool take one or more old tar files (optionally compressed) and a new tar file to generate a single file representing the delta between them (a tardiff file).
 
-`pkg/tar-patch` takes a tardiff file and the uncompressed contents (such as an extracted directory) of the first tar file and reconstructs (binary identically) the second tar file (uncompressed).
+`pkg/tar-patch` takes a tardiff file and the uncompressed contents (such as an extracted directory) of the old tar file(s) and reconstructs (binary identically) the new tar file (uncompressed).
 
 ## Example
 ```
@@ -15,6 +15,21 @@ $ zcat new.tar.gz | shasum
 $ shasum reconstructed.tar
 ```
 
+## Multi-file example
+
+It is sometimes useful to have multiple sources for delta information, such as for example when the
+sources are container image layers. In this case, you need to provide the old tar files in
+the order they will be extracted when applying:
+
+```
+$ tar-diff layer1.tar layer2.tar layer3.tar new-layer.tar delta.tardiff
+$ tar xf layer1.tar -C extracted/
+$ tar xf layer2.tar -C extracted/
+$ tar xf layer3.tar -C extracted/
+$ tar-patch delta.tardiff extracted/ reconstructed.tar
+```
+
+This handles the case where a file in a later tar file overwrites another.
 
 ## Build requirements
 

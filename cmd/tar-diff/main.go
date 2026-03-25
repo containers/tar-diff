@@ -4,6 +4,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path"
@@ -19,7 +20,7 @@ var maxBsdiffSize = flag.Int("max-bsdiff-size", 192, "Max file size in megabytes
 func main() {
 
 	flag.Usage = func() {
-		_, _ = fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [OPTION] old.tar.gz new.tar.gz result.tardiff\n", path.Base(os.Args[0]))
+		_, _ = fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [OPTION] old1.tar.gz [old2.tar.gz ...] new.tar.gz result.tardiff\n", path.Base(os.Args[0]))
 		_, _ = fmt.Fprintf(flag.CommandLine.Output(), "Options:\n")
 		flag.PrintDefaults()
 	}
@@ -31,35 +32,44 @@ func main() {
 		return
 	}
 
-	if flag.NArg() != 3 {
+	if flag.NArg() < 3 {
 		flag.Usage()
 		os.Exit(1)
 	}
 
-	oldFilename := flag.Arg(0)
-	newFilename := flag.Arg(1)
-	deltaFilename := flag.Arg(2)
+	args := flag.Args()
+	numOldFiles := len(args) - 2
+	oldFilenames := args[0:numOldFiles]
+	newFilename := args[numOldFiles]
+	deltaFilename := args[numOldFiles+1]
 
-	oldFile, err := os.Open(oldFilename)
-	if err != nil {
-		log.Fatalf("Error: %s", err)
+	oldFiles := make([]io.ReadSeeker, numOldFiles)
+	for i, oldFilename := range oldFilenames {
+		file, err := os.Open(oldFilename)
+		if err != nil {
+			log.Fatalf("Error: %s", err)
+		}
+		defer file.Close()
+		oldFiles[i] = file
 	}
 
 	newFile, err := os.Open(newFilename)
 	if err != nil {
 		log.Fatalf("Error: %s", err)
 	}
+	defer newFile.Close()
 
 	deltaFile, err := os.Create(deltaFilename)
 	if err != nil {
 		log.Fatalf("Error: %s", err)
 	}
+	defer deltaFile.Close()
 
 	options := tardiff.NewOptions()
 	options.SetCompressionLevel(*compressionLevel)
 	options.SetMaxBsdiffFileSize(int64(*maxBsdiffSize) * 1024 * 1024)
 
-	err = tardiff.Diff(oldFile, newFile, deltaFile, options)
+	err = tardiff.Diff(oldFiles, newFile, deltaFile, options)
 	if err != nil {
 		log.Fatalf("Error: %s", err)
 	}
