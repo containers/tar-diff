@@ -13,11 +13,24 @@ import (
 	tardiff "github.com/containers/tar-diff/pkg/tar-diff"
 )
 
+type prefixList []string
+
+func (p *prefixList) String() string {
+	return fmt.Sprintf("%v", *p)
+}
+
+func (p *prefixList) Set(value string) error {
+	*p = append(*p, value)
+	return nil
+}
+
 var version = flag.Bool("version", false, "Show version")
 var compressionLevel = flag.Int("compression-level", 3, "zstd compression level")
 var maxBsdiffSize = flag.Int("max-bsdiff-size", 192, "Max file size in megabytes to consider using bsdiff, or 0 for no limit")
+var sourcePrefixes prefixList
 
 func main() {
+	flag.Var(&sourcePrefixes, "source-prefix", "Only use source files with this path prefix for delta (can be specified multiple times)")
 
 	flag.Usage = func() {
 		_, _ = fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [OPTION] old1.tar.gz [old2.tar.gz ...] new.tar.gz result.tardiff\n", path.Base(os.Args[0]))
@@ -68,6 +81,9 @@ func main() {
 	options := tardiff.NewOptions()
 	options.SetCompressionLevel(*compressionLevel)
 	options.SetMaxBsdiffFileSize(int64(*maxBsdiffSize) * 1024 * 1024)
+	if len(sourcePrefixes) > 0 {
+		options.SetSourcePrefixes(sourcePrefixes)
+	}
 
 	err = tardiff.Diff(oldFiles, newFile, deltaFile, options)
 	if err != nil {

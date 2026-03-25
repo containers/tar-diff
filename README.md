@@ -31,6 +31,23 @@ $ tar-patch delta.tardiff extracted/ reconstructed.tar
 
 This handles the case where a file in a later tar file overwrites another.
 
+### Partial extraction with prefix filtering
+
+If you only plan to extract certain directories from the old tar files on the target system,
+you can use `--source-prefix` to restrict which files can be used as delta sources:
+
+```
+$ tar-diff --source-prefix=blobs/ --source-prefix=config/ old.tar new.tar delta.tardiff
+$ tar xf old.tar blobs/ config/ -C extracted/
+$ tar-patch delta.tardiff extracted/ reconstructed.tar
+```
+
+This ensures the delta only references files that will be available in the extracted directory.
+
+This is particularly useful for e.g. bootc images, where only the files in the ostree repo
+will be available on the system. For that case you would run tar-diff with
+`--source-prefix=sysroot/ostree/repo/objects/`
+
 ## Build requirements
 
 - golang >= 1.25 (see [`go.mod`](go.mod))

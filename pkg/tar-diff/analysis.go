@@ -330,7 +330,31 @@ func buildSourceInfos(oldInfos []*tarInfo) []sourceInfo {
 	return sourceInfos
 }
 
-func analyzeForDelta(oldInfos []*tarInfo, newTar *tarInfo, oldFiles []io.ReadSeeker) (*deltaAnalysis, error) {
+func matchesAnyPrefix(path string, prefixes []string) bool {
+	if len(prefixes) == 0 {
+		return true
+	}
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func isDeltaSourceCandidate(s *sourceInfo, options *Options) bool {
+	if s.file.overwritten {
+		return false
+	}
+	primaryPath := s.file.paths[0]
+	return matchesAnyPrefix(primaryPath, options.sourcePrefixes)
+}
+
+func analyzeForDelta(oldInfos []*tarInfo, newTar *tarInfo, oldFiles []io.ReadSeeker, options *Options) (*deltaAnalysis, error) {
+	if options == nil {
+		options = NewOptions()
+	}
+
 	sourceInfos := buildSourceInfos(oldInfos)
 
 	sourceBySha1 := make(map[string]*sourceInfo)
@@ -338,13 +362,14 @@ func analyzeForDelta(oldInfos []*tarInfo, newTar *tarInfo, oldFiles []io.ReadSee
 	sourceByIndex := make(map[indexKey]*sourceInfo)
 	for i := range sourceInfos {
 		s := &sourceInfos[i]
-		if !s.file.overwritten {
-			sourceBySha1[s.file.sha1] = s
-			for _, p := range s.file.paths {
-				sourceByPath[p] = s
-			}
-			sourceByIndex[indexKey{fileIndex: s.sourceTarFileIndex, entryIndex: s.file.index}] = s
+		if !isDeltaSourceCandidate(s, options) {
+			continue
 		}
+		sourceBySha1[s.file.sha1] = s
+		for _, p := range s.file.paths {
+			sourceByPath[p] = s
+		}
+		sourceByIndex[indexKey{fileIndex: s.sourceTarFileIndex, entryIndex: s.file.index}] = s
 	}
 
 	targetInfos := make([]targetInfo, 0, len(newTar.files)+len(newTar.hardlinks))
@@ -380,6 +405,10 @@ func analyzeForDelta(oldInfos []*tarInfo, newTar *tarInfo, oldFiles []io.ReadSee
 					for j := range sourceInfos {
 						s = &sourceInfos[j]
 
+						// Skip files that we're not allowed to use
+						if !isDeltaSourceCandidate(s, options) {
+							continue
+						}
 						// Skip files that make no sense to delta (like compressed files)
 						if !isDeltaCandidate(s.file) {
 							continue

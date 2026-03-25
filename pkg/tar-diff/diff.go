@@ -262,6 +262,7 @@ func generateDelta(newFile io.ReadSeeker, deltaFile io.Writer, analysis *deltaAn
 type Options struct {
 	compressionLevel int
 	maxBsdiffSize    int64
+	sourcePrefixes   []string
 }
 
 // SetCompressionLevel sets the compression level for the output diff file.
@@ -274,11 +275,18 @@ func (o *Options) SetMaxBsdiffFileSize(maxBsdiffSize int64) {
 	o.maxBsdiffSize = maxBsdiffSize
 }
 
+// SetSourcePrefixes sets path prefixes to filter which source files can be used for delta.
+// Only files whose primary path starts with one of these prefixes will be used as delta sources.
+func (o *Options) SetSourcePrefixes(prefixes []string) {
+	o.sourcePrefixes = prefixes
+}
+
 // NewOptions creates a new Options struct with default values.
 func NewOptions() *Options {
 	return &Options{
 		compressionLevel: 3,
 		maxBsdiffSize:    defaultMaxBsdiffSize,
+		sourcePrefixes:   nil,
 	}
 }
 
@@ -322,7 +330,7 @@ func Diff(oldTarFiles []io.ReadSeeker, newTarFile io.ReadSeeker, diffFile io.Wri
 	}
 
 	// Compare new and old for delta information
-	analysis, err := analyzeForDelta(oldInfos, newInfo, oldTarFiles)
+	analysis, err := analyzeForDelta(oldInfos, newInfo, oldTarFiles, options)
 	if err != nil {
 		return err
 	}
