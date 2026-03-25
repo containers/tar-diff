@@ -209,8 +209,8 @@ func isDeltaCandidate(file *tarFileInfo) bool {
 	// NB: We explicitly don't have .gz here in case someone might be
 	// using --rsyncable for that.
 	for _, basename := range file.basenames {
-		if strings.HasPrefix(basename, ".xz") ||
-			strings.HasPrefix(basename, ".bz2") {
+		if strings.HasSuffix(basename, ".xz") ||
+			strings.HasSuffix(basename, ".bz2") {
 			return false
 		}
 	}
