@@ -29,7 +29,7 @@ var compressionLevel = flag.Int("compression-level", 3, "zstd compression level"
 var maxBsdiffSize = flag.Int("max-bsdiff-size", 192, "Max file size in megabytes to consider using bsdiff, or 0 for no limit")
 var sourcePrefixes prefixList
 
-func main() {
+func realMain() int {
 	flag.Var(&sourcePrefixes, "source-prefix", "Only use source files with this path prefix for delta (can be specified multiple times)")
 
 	flag.Usage = func() {
@@ -42,12 +42,12 @@ func main() {
 
 	if *version {
 		fmt.Printf("%s %s\n", path.Base(os.Args[0]), protocol.VERSION)
-		return
+		return 0
 	}
 
 	if flag.NArg() < 3 {
 		flag.Usage()
-		os.Exit(1)
+		return 1
 	}
 
 	args := flag.Args()
@@ -60,7 +60,8 @@ func main() {
 	for i, oldFilename := range oldFilenames {
 		file, err := os.Open(oldFilename)
 		if err != nil {
-			log.Fatalf("Error: %s", err)
+			log.Printf("Error: %s", err)
+			return 1
 		}
 		defer file.Close()
 		oldFiles[i] = file
@@ -68,13 +69,15 @@ func main() {
 
 	newFile, err := os.Open(newFilename)
 	if err != nil {
-		log.Fatalf("Error: %s", err)
+		log.Printf("Error: %s", err)
+		return 1
 	}
 	defer newFile.Close()
 
 	deltaFile, err := os.Create(deltaFilename)
 	if err != nil {
-		log.Fatalf("Error: %s", err)
+		log.Printf("Error: %s", err)
+		return 1
 	}
 	defer deltaFile.Close()
 
@@ -87,7 +90,13 @@ func main() {
 
 	err = tardiff.Diff(oldFiles, newFile, deltaFile, options)
 	if err != nil {
-		log.Fatalf("Error: %s", err)
+		log.Printf("Error: %s", err)
+		return 1
 	}
+	return 0
+}
 
+// We wrap a function the has a return value so we can safely use defer
+func main() {
+	os.Exit(realMain())
 }
