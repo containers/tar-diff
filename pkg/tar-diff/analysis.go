@@ -350,6 +350,43 @@ func isDeltaSourceCandidate(s *sourceInfo, options *Options) bool {
 	return matchesAnyPrefix(primaryPath, options.sourcePrefixes)
 }
 
+func findFuzzyDeltaSource(sourceInfos []sourceInfo, targetFile *tarFileInfo, options *Options) *sourceInfo {
+	// Check for moved (first) or renamed (second) versions
+	for fuzzy := 0; fuzzy < 2; fuzzy++ {
+		var source *sourceInfo
+		for j := range sourceInfos {
+			s := &sourceInfos[j]
+
+			// Skip files that we're not allowed to use
+			if !isDeltaSourceCandidate(s, options) {
+				continue
+			}
+			// Skip files that make no sense to delta (like compressed files)
+			if !isDeltaCandidate(s.file) {
+				continue
+			}
+			// We're looking for moved files, or renames to "similar names"
+			if !nameIsSimilar(targetFile, s.file, fuzzy) {
+				continue
+			}
+			// Skip files that are wildly dissimilar in size, such as binaries replaces by shellscripts
+			if !sizeIsSimilar(targetFile, s.file) {
+				continue
+			}
+			// Choose the matching source that have most similar size to the new file
+			if source != nil && abs(source.file.size-targetFile.size) < abs(s.file.size-targetFile.size) {
+				continue
+			}
+
+			source = s
+		}
+		if source != nil {
+			return source
+		}
+	}
+	return nil
+}
+
 func analyzeForDelta(oldInfos []*tarInfo, newTar *tarInfo, oldFiles []io.ReadSeeker, options *Options) (*deltaAnalysis, error) {
 	if options == nil {
 		options = NewOptions()
@@ -400,35 +437,9 @@ func analyzeForDelta(oldInfos []*tarInfo, newTar *tarInfo, oldFiles []io.ReadSee
 				usedForDelta = true
 				source = s
 			} else {
-				// Check for moved (first) or renamed (second) versions
-				for fuzzy := 0; fuzzy < 2 && source == nil; fuzzy++ {
-					for j := range sourceInfos {
-						s = &sourceInfos[j]
-
-						// Skip files that we're not allowed to use
-						if !isDeltaSourceCandidate(s, options) {
-							continue
-						}
-						// Skip files that make no sense to delta (like compressed files)
-						if !isDeltaCandidate(s.file) {
-							continue
-						}
-						// We're looking for moved files, or renames to "similar names"
-						if !nameIsSimilar(file, s.file, fuzzy) {
-							continue
-						}
-						// Skip files that are wildly dissimilar in size, such as binaries replaces by shellscripts
-						if !sizeIsSimilar(file, s.file) {
-							continue
-						}
-						// Choose the matching source that have most similar size to the new file
-						if source != nil && abs(source.file.size-file.size) < abs(s.file.size-file.size) {
-							continue
-						}
-
-						usedForDelta = true
-						source = s
-					}
+				source = findFuzzyDeltaSource(sourceInfos, file, options)
+				if source != nil {
+					usedForDelta = true
 				}
 			}
 		}
