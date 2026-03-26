@@ -29,6 +29,12 @@ var compressionLevel = flag.Int("compression-level", 3, "zstd compression level"
 var maxBsdiffSize = flag.Int("max-bsdiff-size", 192, "Max file size in megabytes to consider using bsdiff, or 0 for no limit")
 var sourcePrefixes prefixList
 
+func closeAndWarn(file *os.File) {
+	if err := file.Close(); err != nil {
+		log.Printf("Failed to close file: %v", err)
+	}
+}
+
 func realMain() int {
 	flag.Var(&sourcePrefixes, "source-prefix", "Only use source files with this path prefix for delta (can be specified multiple times)")
 
@@ -63,7 +69,7 @@ func realMain() int {
 			log.Printf("Error: %s", err)
 			return 1
 		}
-		defer file.Close()
+		defer closeAndWarn(file)
 		oldFiles[i] = file
 	}
 
@@ -72,14 +78,14 @@ func realMain() int {
 		log.Printf("Error: %s", err)
 		return 1
 	}
-	defer newFile.Close()
+	defer closeAndWarn(newFile)
 
 	deltaFile, err := os.Create(deltaFilename)
 	if err != nil {
 		log.Printf("Error: %s", err)
 		return 1
 	}
-	defer deltaFile.Close()
+	defer closeAndWarn(deltaFile)
 
 	options := tardiff.NewOptions()
 	options.SetCompressionLevel(*compressionLevel)
