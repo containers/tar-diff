@@ -1,3 +1,6 @@
+[![CI](https://github.com/containers/tar-diff/actions/workflows/ci.yml/badge.svg)](https://github.com/containers/tar-diff/actions/workflows/ci.yml)
+[![Go Version](https://img.shields.io/badge/go-1.25-blue.svg)](https://golang.org/dl/)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![codecov](https://codecov.io/gh/containers/tar-diff/graph/badge.svg)](https://codecov.io/gh/containers/tar-diff)
 
 # tar-diff
