@@ -189,7 +189,7 @@ func TestAnalyzeForDelta_HardlinksInTargetInfo(t *testing.T) {
 		t.Fatalf("oldTar.Seek: %v", err)
 	}
 
-	analysis, err := analyzeForDelta([]*tarInfo{oldInfo}, newInfo, []io.ReadSeeker{oldTar}, nil)
+	analysis, err := analyzeForDelta(buildSourceAnalysis([]*tarInfo{oldInfo}, 1, nil), newInfo, []io.ReadSeeker{oldTar}, nil)
 	if err != nil {
 		t.Fatalf("analyzeForDelta failed: %v", err)
 	}
@@ -300,7 +300,7 @@ func TestAnalyzeForDelta_MatchViaHardlinkPath(t *testing.T) {
 		t.Fatalf("oldTar.Seek: %v", err)
 	}
 
-	analysis, err := analyzeForDelta([]*tarInfo{oldInfo}, newInfo, []io.ReadSeeker{oldTar}, nil)
+	analysis, err := analyzeForDelta(buildSourceAnalysis([]*tarInfo{oldInfo}, 1, nil), newInfo, []io.ReadSeeker{oldTar}, nil)
 	if err != nil {
 		t.Fatalf("analyzeForDelta failed: %v", err)
 	}

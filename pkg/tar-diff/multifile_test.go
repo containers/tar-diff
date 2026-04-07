@@ -35,7 +35,7 @@ func TestBuildSourceInfos(t *testing.T) {
 		t.Fatalf("Failed to analyze tar2: %v", err)
 	}
 
-	sourceInfos := buildSourceInfos([]*tarInfo{info1, info2})
+	sourceInfos := buildSourceAnalysis([]*tarInfo{info1, info2}, 2, NewOptions()).sourceInfos
 
 	// Should have 3 files total (file1, file2-orig, file2-override, file3)
 	// But file2-orig should be marked as overwritten
@@ -111,7 +111,7 @@ func TestBuildSourceInfos_HardlinkConflicts(t *testing.T) {
 		t.Fatalf("Failed to analyze tar2: %v", err)
 	}
 
-	sourceInfos := buildSourceInfos([]*tarInfo{info1, info2})
+	sourceInfos := buildSourceAnalysis([]*tarInfo{info1, info2}, 2, NewOptions()).sourceInfos
 
 	// Should have 4 files (two from each layer)
 	if len(sourceInfos) != 4 {

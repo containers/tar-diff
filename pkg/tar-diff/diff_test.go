@@ -48,7 +48,7 @@ func TestGenerateDelta_Hardlinks(t *testing.T) {
 	if _, err := oldTar.Seek(0, 0); err != nil {
 		t.Fatalf("oldTar.Seek: %v", err)
 	}
-	analysis, err := analyzeForDelta([]*tarInfo{oldInfo}, newInfo, []io.ReadSeeker{oldTar}, nil)
+	analysis, err := analyzeForDelta(buildSourceAnalysis([]*tarInfo{oldInfo}, 1, nil), newInfo, []io.ReadSeeker{oldTar}, nil)
 	if err != nil {
 		t.Fatalf("analyzeForDelta failed: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestGenerateDelta_MixedHardlinksAndDuplicates(t *testing.T) {
 	if _, err := oldTar.Seek(0, 0); err != nil {
 		t.Fatalf("oldTar.Seek: %v", err)
 	}
-	analysis, err := analyzeForDelta([]*tarInfo{oldInfo}, newInfo, []io.ReadSeeker{oldTar}, nil)
+	analysis, err := analyzeForDelta(buildSourceAnalysis([]*tarInfo{oldInfo}, 1, nil), newInfo, []io.ReadSeeker{oldTar}, nil)
 	if err != nil {
 		t.Fatalf("analyzeForDelta failed: %v", err)
 	}

@@ -77,7 +77,7 @@ func TestDiff_SourcePrefix(t *testing.T) {
 	options := NewOptions()
 	options.SetSourcePrefixes([]string{"blobs/"})
 
-	analysis, err := analyzeForDelta([]*tarInfo{oldInfo}, newInfo, []io.ReadSeeker{old}, options)
+	analysis, err := analyzeForDelta(buildSourceAnalysis([]*tarInfo{oldInfo}, 1, options), newInfo, []io.ReadSeeker{old}, nil)
 	if err != nil {
 		t.Fatalf("analyzeForDelta failed: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestDiff_SourcePrefix(t *testing.T) {
 			// Should have a source (matches prefix)
 			if source == nil {
 				t.Error("blobs/sha256/abc123 should have a source (matches prefix)")
-			} else if !source.usedForDelta {
+			} else if sdi := analysis.sourceDataInfos[source]; sdi == nil || !sdi.usedForDelta {
 				t.Error("blobs/sha256/abc123 source should be usedForDelta")
 			}
 
@@ -121,7 +121,7 @@ func TestDiff_SourceMultiplePrefixes(t *testing.T) {
 	options := NewOptions()
 	options.SetSourcePrefixes([]string{"blobs/", "config/"})
 
-	analysis, err := analyzeForDelta([]*tarInfo{oldInfo}, newInfo, []io.ReadSeeker{old}, options)
+	analysis, err := analyzeForDelta(buildSourceAnalysis([]*tarInfo{oldInfo}, 1, options), newInfo, []io.ReadSeeker{old}, nil)
 	if err != nil {
 		t.Fatalf("analyzeForDelta failed: %v", err)
 	}
@@ -157,7 +157,7 @@ func TestDiff_NoPrefixFilter(t *testing.T) {
 	old, oldInfo, _, newInfo := setupPrefixFilterTestData(t)
 
 	// No prefix filter (default) - pass nil for default options
-	analysis, err := analyzeForDelta([]*tarInfo{oldInfo}, newInfo, []io.ReadSeeker{old}, nil)
+	analysis, err := analyzeForDelta(buildSourceAnalysis([]*tarInfo{oldInfo}, 1, nil), newInfo, []io.ReadSeeker{old}, nil)
 	if err != nil {
 		t.Fatalf("analyzeForDelta failed: %v", err)
 	}
