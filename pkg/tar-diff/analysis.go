@@ -469,7 +469,7 @@ func analyzeForDelta(oldInfos []*tarInfo, newTar *tarInfo, oldFiles []io.ReadSee
 		targetInfoByIndex[hl.index] = &targetInfos[len(targetInfos)-1]
 	}
 
-	tmpfile, err := os.CreateTemp(os.TempDir(), "tar-diff-")
+	tmpfile, err := os.CreateTemp(options.tmpDir, "tar-diff-")
 	if err != nil {
 		return nil, err
 	}

@@ -27,6 +27,7 @@ func (p *prefixList) Set(value string) error {
 var version = flag.Bool("version", false, "Show version")
 var compressionLevel = flag.Int("compression-level", 3, "zstd compression level")
 var maxBsdiffSize = flag.Int("max-bsdiff-size", 192, "Max file size in megabytes to consider using bsdiff, or 0 for no limit")
+var tmpDir = flag.String("tmp-dir", defaultTmpDir, "Directory for temporary files")
 var sourcePrefixes prefixList
 
 func closeAndWarn(file *os.File) {
@@ -93,6 +94,7 @@ func realMain() int {
 	if len(sourcePrefixes) > 0 {
 		options.SetSourcePrefixes(sourcePrefixes)
 	}
+	options.SetTmpDir(*tmpDir)
 
 	err = tardiff.Diff(oldFiles, newFile, deltaFile, options)
 	if err != nil {

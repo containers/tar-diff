@@ -263,6 +263,7 @@ type Options struct {
 	compressionLevel int
 	maxBsdiffSize    int64
 	sourcePrefixes   []string
+	tmpDir           string
 }
 
 // SetCompressionLevel sets the compression level for the output diff file.
@@ -279,6 +280,11 @@ func (o *Options) SetMaxBsdiffFileSize(maxBsdiffSize int64) {
 // Only files whose primary path starts with one of these prefixes will be used as delta sources.
 func (o *Options) SetSourcePrefixes(prefixes []string) {
 	o.sourcePrefixes = prefixes
+}
+
+// SetTmpDir sets the directory for temporary files. Defaults to os.TempDir().
+func (o *Options) SetTmpDir(dir string) {
+	o.tmpDir = dir
 }
 
 // NewOptions creates a new Options struct with default values.
