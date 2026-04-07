@@ -357,6 +357,9 @@ func buildSourceAnalysis(oldInfos []*tarInfo, numOldFiles int, options *Options)
 			if idx, exists := pathToFileIndex[p]; !exists || idx != i {
 				continue
 			}
+			if isIgnoredPrefix(p, options.ignoreSourcePrefixes) {
+				continue
+			}
 			if !matchesAnyPrefix(p, options.sourcePrefixes) {
 				continue
 			}
@@ -396,6 +399,15 @@ func matchesAnyPrefix(path string, prefixes []string) bool {
 	if len(prefixes) == 0 {
 		return true
 	}
+	for _, prefix := range prefixes {
+		if hasPathPrefix(path, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func isIgnoredPrefix(path string, prefixes []string) bool {
 	for _, prefix := range prefixes {
 		if hasPathPrefix(path, prefix) {
 			return true

@@ -261,10 +261,11 @@ func generateDelta(newFile io.ReadSeeker, deltaFile io.Writer, analysis *deltaAn
 
 // Options configures the behavior of the diff operation.
 type Options struct {
-	compressionLevel int
-	maxBsdiffSize    int64
-	sourcePrefixes   []string
-	tmpDir           string
+	compressionLevel     int
+	maxBsdiffSize        int64
+	sourcePrefixes       []string
+	ignoreSourcePrefixes []string
+	tmpDir               string
 }
 
 // SetCompressionLevel sets the compression level for the output diff file.
@@ -288,12 +289,20 @@ func (o *Options) SetTmpDir(dir string) {
 	o.tmpDir = dir
 }
 
+// SetIgnoreSourcePrefixes sets path prefixes to exclude from delta sources.
+// Files whose paths all match one of these prefixes will not be used as delta sources.
+// If a file has multiple names (hardlinks), any non-ignored name makes the file usable.
+func (o *Options) SetIgnoreSourcePrefixes(prefixes []string) {
+	o.ignoreSourcePrefixes = prefixes
+}
+
 // NewOptions creates a new Options struct with default values.
 func NewOptions() *Options {
 	return &Options{
-		compressionLevel: 3,
-		maxBsdiffSize:    defaultMaxBsdiffSize,
-		sourcePrefixes:   nil,
+		compressionLevel:     3,
+		maxBsdiffSize:        defaultMaxBsdiffSize,
+		sourcePrefixes:       nil,
+		ignoreSourcePrefixes: nil,
 	}
 }
 

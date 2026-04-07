@@ -29,6 +29,7 @@ var compressionLevel = flag.Int("compression-level", 3, "zstd compression level"
 var maxBsdiffSize = flag.Int("max-bsdiff-size", 192, "Max file size in megabytes to consider using bsdiff, or 0 for no limit")
 var tmpDir = flag.String("tmp-dir", defaultTmpDir, "Directory for temporary files")
 var sourcePrefixes prefixList
+var ignoreSourcePrefixes prefixList
 
 func closeAndWarn(file *os.File) {
 	if err := file.Close(); err != nil {
@@ -38,6 +39,7 @@ func closeAndWarn(file *os.File) {
 
 func realMain() int {
 	flag.Var(&sourcePrefixes, "source-prefix", "Only use source files with this path prefix for delta (can be specified multiple times)")
+	flag.Var(&ignoreSourcePrefixes, "ignore-source-prefix", "Ignore source files with this path prefix for delta (can be specified multiple times)")
 
 	flag.Usage = func() {
 		_, _ = fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [OPTION] old1.tar.gz [old2.tar.gz ...] new.tar.gz result.tardiff\n", path.Base(os.Args[0]))
@@ -93,6 +95,9 @@ func realMain() int {
 	options.SetMaxBsdiffFileSize(int64(*maxBsdiffSize) * 1024 * 1024)
 	if len(sourcePrefixes) > 0 {
 		options.SetSourcePrefixes(sourcePrefixes)
+	}
+	if len(ignoreSourcePrefixes) > 0 {
+		options.SetIgnoreSourcePrefixes(ignoreSourcePrefixes)
 	}
 	options.SetTmpDir(*tmpDir)
 
