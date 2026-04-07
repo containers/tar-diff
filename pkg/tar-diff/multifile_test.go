@@ -25,12 +25,12 @@ func TestBuildSourceInfos(t *testing.T) {
 		t.Fatalf("Failed to create tar2: %v", err)
 	}
 
-	info1, err := analyzeTar(tar1)
+	info1, err := analyzeTar(tar1, false)
 	if err != nil {
 		t.Fatalf("Failed to analyze tar1: %v", err)
 	}
 
-	info2, err := analyzeTar(tar2)
+	info2, err := analyzeTar(tar2, false)
 	if err != nil {
 		t.Fatalf("Failed to analyze tar2: %v", err)
 	}
@@ -101,12 +101,12 @@ func TestBuildSourceInfos_HardlinkConflicts(t *testing.T) {
 		t.Fatalf("Failed to create tar2: %v", err)
 	}
 
-	info1, err := analyzeTar(tar1)
+	info1, err := analyzeTar(tar1, false)
 	if err != nil {
 		t.Fatalf("Failed to analyze tar1: %v", err)
 	}
 
-	info2, err := analyzeTar(tar2)
+	info2, err := analyzeTar(tar2, false)
 	if err != nil {
 		t.Fatalf("Failed to analyze tar2: %v", err)
 	}

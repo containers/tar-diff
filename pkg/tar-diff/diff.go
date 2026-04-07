@@ -266,6 +266,7 @@ type Options struct {
 	sourcePrefixes       []string
 	ignoreSourcePrefixes []string
 	tmpDir               string
+	applyWhiteouts       bool
 }
 
 // SetCompressionLevel sets the compression level for the output diff file.
@@ -294,6 +295,14 @@ func (o *Options) SetTmpDir(dir string) {
 // If a file has multiple names (hardlinks), any non-ignored name makes the file usable.
 func (o *Options) SetIgnoreSourcePrefixes(prefixes []string) {
 	o.ignoreSourcePrefixes = prefixes
+}
+
+// SetApplyWhiteouts enables docker/OCI-style whiteout processing when analyzing
+// old tar layers. Whiteout files (.wh.<name> and .wh..wh..opq) in upper layers
+// remove matching paths from lower layers, so the delta sources reflect the
+// merged container image rather than individual layers.
+func (o *Options) SetApplyWhiteouts(apply bool) {
+	o.applyWhiteouts = apply
 }
 
 // NewOptions creates a new Options struct with default values.
@@ -333,7 +342,7 @@ func AnalyzeSources(oldTarFiles []io.ReadSeeker, options *Options) (*SourceAnaly
 
 	oldInfos := make([]*tarInfo, len(oldTarFiles))
 	for i, oldTarFile := range oldTarFiles {
-		oldInfo, err := analyzeTar(oldTarFile)
+		oldInfo, err := analyzeTar(oldTarFile, options.applyWhiteouts)
 		if err != nil {
 			return nil, err
 		}
@@ -357,7 +366,7 @@ func DiffWithSources(sources *SourceAnalysis, oldTarFiles []io.ReadSeeker, newTa
 		return fmt.Errorf("expected %d old tar files, got %d", sources.numOldFiles, len(oldTarFiles))
 	}
 
-	newInfo, err := analyzeTar(newTarFile)
+	newInfo, err := analyzeTar(newTarFile, false)
 	if err != nil {
 		return err
 	}

@@ -33,9 +33,15 @@ type hardlinkInfo struct {
 	header   *tar.Header
 }
 
+type whiteoutEntry struct {
+	path   string // target path for specific whiteout, or directory prefix for opaque
+	opaque bool
+}
+
 type tarInfo struct {
 	files     []tarFileInfo // no size=0 files
 	hardlinks []hardlinkInfo
+	whiteouts []whiteoutEntry
 }
 
 type targetInfo struct {
@@ -123,7 +129,7 @@ func useTarFile(hdr *tar.Header, cleanPath string) bool {
 	return true
 }
 
-func analyzeTar(tarMaybeCompressed io.Reader) (*tarInfo, error) {
+func analyzeTar(tarMaybeCompressed io.Reader, applyWhiteouts bool) (*tarInfo, error) {
 	tarFile, _, err := compression.AutoDecompress(tarMaybeCompressed)
 	if err != nil {
 		return nil, err
@@ -136,6 +142,7 @@ func analyzeTar(tarMaybeCompressed io.Reader) (*tarInfo, error) {
 
 	files := make([]tarFileInfo, 0)
 	hardlinks := make([]hardlinkInfo, 0)
+	whiteouts := make([]whiteoutEntry, 0)
 	infoByPath := make(map[string]int) // map from path to index in 'files'
 
 	rdr := tar.NewReader(tarFile)
@@ -166,6 +173,26 @@ func analyzeTar(tarMaybeCompressed io.Reader) (*tarInfo, error) {
 			}
 			// Skip the content (hardlinks have no content)
 			continue
+		}
+
+		// Detect docker/OCI whiteout files
+		if applyWhiteouts {
+			basename := path.Base(pathname)
+			if strings.HasPrefix(basename, ".wh.") {
+				dir := path.Dir(pathname)
+				if basename == ".wh..wh..opq" {
+					if dir == "." {
+						dir = ""
+					} else {
+						dir += "/"
+					}
+					whiteouts = append(whiteouts, whiteoutEntry{path: dir, opaque: true})
+				} else {
+					targetName := strings.TrimPrefix(basename, ".wh.")
+					whiteouts = append(whiteouts, whiteoutEntry{path: path.Join(dir, targetName), opaque: false})
+				}
+				continue
+			}
 		}
 
 		// If a file is in the archive several times, mark it as overwritten so its not used for delta source
@@ -205,7 +232,7 @@ func analyzeTar(tarMaybeCompressed io.Reader) (*tarInfo, error) {
 		}
 	}
 
-	info := tarInfo{files: files, hardlinks: hardlinks}
+	info := tarInfo{files: files, hardlinks: hardlinks, whiteouts: whiteouts}
 	return &info, nil
 }
 
@@ -318,6 +345,19 @@ func buildSourceAnalysis(oldInfos []*tarInfo, numOldFiles int, options *Options)
 	pathToFileIndex := make(map[string]int)
 
 	for fileIdx, oldInfo := range oldInfos {
+		// Apply whiteouts from this layer to sources from earlier layers
+		for _, wo := range oldInfo.whiteouts {
+			if wo.opaque {
+				for p := range pathToFileIndex {
+					if hasPathPrefix(p, wo.path) {
+						delete(pathToFileIndex, p)
+					}
+				}
+			} else {
+				delete(pathToFileIndex, wo.path)
+			}
+		}
+
 		for i := range oldInfo.files {
 			file := &oldInfo.files[i]
 
@@ -329,7 +369,7 @@ func buildSourceAnalysis(oldInfos []*tarInfo, numOldFiles int, options *Options)
 
 			currentFileIndex := len(sourceInfos)
 
-			// Register all paths of this file so
+			// Register all paths of this file so whiteouts and
 			// overwrites from later layers can find them
 			for _, p := range file.paths {
 				pathToFileIndex[p] = currentFileIndex

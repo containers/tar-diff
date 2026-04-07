@@ -28,6 +28,7 @@ var version = flag.Bool("version", false, "Show version")
 var compressionLevel = flag.Int("compression-level", 3, "zstd compression level")
 var maxBsdiffSize = flag.Int("max-bsdiff-size", 192, "Max file size in megabytes to consider using bsdiff, or 0 for no limit")
 var tmpDir = flag.String("tmp-dir", defaultTmpDir, "Directory for temporary files")
+var applyWhiteouts = flag.Bool("apply-whiteouts", false, "Apply docker/OCI whiteout files when analyzing old tar layers")
 var sourcePrefixes prefixList
 var ignoreSourcePrefixes prefixList
 
@@ -100,6 +101,9 @@ func realMain() int {
 		options.SetIgnoreSourcePrefixes(ignoreSourcePrefixes)
 	}
 	options.SetTmpDir(*tmpDir)
+	if *applyWhiteouts {
+		options.SetApplyWhiteouts(true)
+	}
 
 	err = tardiff.Diff(oldFiles, newFile, deltaFile, options)
 	if err != nil {

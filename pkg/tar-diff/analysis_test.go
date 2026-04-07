@@ -59,7 +59,7 @@ func TestAnalyzeTar_Hardlinks(t *testing.T) {
 		t.Fatalf("Failed to create test tar: %v", err)
 	}
 
-	info, err := analyzeTar(tarFile)
+	info, err := analyzeTar(tarFile, false)
 	if err != nil {
 		t.Fatalf("analyzeTar failed: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestAnalyzeTar_MultipleHardlinks(t *testing.T) {
 		t.Fatalf("Failed to create test tar: %v", err)
 	}
 
-	info, err := analyzeTar(tarFile)
+	info, err := analyzeTar(tarFile, false)
 	if err != nil {
 		t.Fatalf("analyzeTar failed: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestAnalyzeTar_DuplicateFilesAndHardlinks(t *testing.T) {
 		t.Fatalf("Failed to create test tar: %v", err)
 	}
 
-	info, err := analyzeTar(tarFile)
+	info, err := analyzeTar(tarFile, false)
 	if err != nil {
 		t.Fatalf("analyzeTar failed: %v", err)
 	}
@@ -174,12 +174,12 @@ func TestAnalyzeForDelta_HardlinksInTargetInfo(t *testing.T) {
 		t.Fatalf("newTar.Seek: %v", err)
 	}
 
-	oldInfo, err := analyzeTar(oldTar)
+	oldInfo, err := analyzeTar(oldTar, false)
 	if err != nil {
 		t.Fatalf("analyzeTar (old) failed: %v", err)
 	}
 
-	newInfo, err := analyzeTar(newTar)
+	newInfo, err := analyzeTar(newTar, false)
 	if err != nil {
 		t.Fatalf("analyzeTar (new) failed: %v", err)
 	}
@@ -226,7 +226,7 @@ func TestAnalyzeTar_HardlinksAddMultiplePaths(t *testing.T) {
 		t.Fatalf("Failed to create test tar: %v", err)
 	}
 
-	info, err := analyzeTar(tarFile)
+	info, err := analyzeTar(tarFile, false)
 	if err != nil {
 		t.Fatalf("analyzeTar failed: %v", err)
 	}
@@ -286,12 +286,12 @@ func TestAnalyzeForDelta_MatchViaHardlinkPath(t *testing.T) {
 		t.Fatalf("newTar.Seek: %v", err)
 	}
 
-	oldInfo, err := analyzeTar(oldTar)
+	oldInfo, err := analyzeTar(oldTar, false)
 	if err != nil {
 		t.Fatalf("analyzeTar (old) failed: %v", err)
 	}
 
-	newInfo, err := analyzeTar(newTar)
+	newInfo, err := analyzeTar(newTar, false)
 	if err != nil {
 		t.Fatalf("analyzeTar (new) failed: %v", err)
 	}

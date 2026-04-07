@@ -52,7 +52,7 @@ func setupPrefixFilterTestData(t *testing.T) (oldTar io.ReadSeeker, oldTarInfo *
 		t.Fatalf("Failed to create new tar: %v", err)
 	}
 
-	oldTarInfo, err = analyzeTar(oldTar)
+	oldTarInfo, err = analyzeTar(oldTar, false)
 	if err != nil {
 		t.Fatalf("Failed to analyze oldTar: %v", err)
 	}
@@ -60,7 +60,7 @@ func setupPrefixFilterTestData(t *testing.T) (oldTar io.ReadSeeker, oldTarInfo *
 		t.Fatalf("oldTar.Seek: %v", err)
 	}
 
-	newInfo, err = analyzeTar(newTar)
+	newInfo, err = analyzeTar(newTar, false)
 	if err != nil {
 		t.Fatalf("Failed to analyze new tar: %v", err)
 	}
