@@ -330,12 +330,19 @@ func buildSourceInfos(oldInfos []*tarInfo) []sourceInfo {
 	return sourceInfos
 }
 
+func hasPathPrefix(s, prefix string) bool {
+	if !strings.HasPrefix(s, prefix) {
+		return false
+	}
+	return len(s) == len(prefix) || prefix == "" || strings.HasSuffix(prefix, "/") || s[len(prefix)] == '/'
+}
+
 func matchesAnyPrefix(path string, prefixes []string) bool {
 	if len(prefixes) == 0 {
 		return true
 	}
 	for _, prefix := range prefixes {
-		if strings.HasPrefix(path, prefix) {
+		if hasPathPrefix(path, prefix) {
 			return true
 		}
 	}
