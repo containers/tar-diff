@@ -61,10 +61,15 @@ tools: .install.golangci-lint
 clean:
 	rm -f tar-diff tar-patch
 	rm -rf $(PROJECT)_$(VERSION) $(PROJ_TARBALL)
-	rm -rf $(GOCOVERDIR)
+	rm -rf $(dir $(GOCOVERDIR))
 
 integration-test: build
 	GOCOVERDIR=$(GOCOVERDIR) tests/test.sh
+	GOCOVERDIR=$(GOCOVERDIR) tests/test-multi-old.sh
+	GOCOVERDIR=$(GOCOVERDIR) tests/test-source-prefix.sh
+	GOCOVERDIR=$(GOCOVERDIR) tests/test-delta-paths.sh
+	GOCOVERDIR=$(GOCOVERDIR) tests/test-tar-errors.sh
+	GOCOVERDIR=$(GOCOVERDIR) tests/test-fuzzy-abs.sh
 	go tool covdata percent -i=$(GOCOVERDIR) -o=$(GOCOVERDIR)/integration.out
 
 
