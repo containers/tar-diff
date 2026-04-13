@@ -2,100 +2,31 @@
 
 set -e
 
-command -v gtar &>/dev/null && { shopt -s expand_aliases; alias tar=gtar; }
+source tests/utils.sh
+
+use_gnu_tar_if_available
+
+echo "Checking -version"
+td_line=$(./tar-diff -version 2>/dev/null | head -n1)
+tp_line=$(./tar-patch -version 2>/dev/null | head -n1)
+td_ver=${td_line##* }
+tp_ver=${tp_line##* }
+if [[ -z "$td_ver" || ! "$td_ver" =~ ^v[0-9] ]]; then
+	echo "unexpected ./tar-diff -version (first line: ${td_line})" >&2
+	exit 1
+fi
+if [[ -z "$tp_ver" || ! "$tp_ver" =~ ^v[0-9] ]]; then
+	echo "unexpected ./tar-patch -version (first line: ${tp_line})" >&2
+	exit 1
+fi
 
 
-ln_soft(){
-    local target="$1"
-    local link="$2"
-
-# Detect Windows
-    if [[ -n "$WINDIR" ]] || [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "msys2" ]]; then
-        touch "${target}"
-        powershell -Command "New-Item -ItemType SymbolicLink -Path '${link}' -Target '${target}' -Force"
-    else
-        ln -s "${target}" "${link}"
-    fi
-}
-ln_hard(){
-    local source="$1"
-    local link="$2"
-
-#Window detection
-    if [[ -n "$WINDIR" ]] || [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "msys2" ]]; then
-        powershell -Command "New-Item -ItemType HardLink -Path '${link}' -Value '${source}' -Force"
-    else
-        ln "${source}" "${link}"
-    fi
-}
-
-TEST_DIR=$(mktemp -d /tmp/test-tardiff-XXXXXX)
+TEST_DIR=$(mktemp -d "${TMPDIR:-/tmp}/test-tardiff-XXXXXX")
 
 cleanup () {
     rm -rf $TEST_DIR
 }
 trap cleanup EXIT
-
-create_orig () {
-    DIR=$1
-
-    mkdir -p $DIR
-    pushd $DIR &> /dev/null
-
-    mkdir data
-    mkdir data/dir1
-    mkdir data/dir2
-    echo foo > data/dir1/foo.txt
-    echo bar > data/dir1/bar.txt
-    echo movedata > data/dir1/move.txt
-    
-    # Skip broken symlink on Windows: tar refuses to archive symlinks with non-existent targets
-    if [[ -z "$WINDIR" ]] && [[ "$OSTYPE" != "msys" ]] && [[ "$OSTYPE" != "msys2" ]]; then
-        ln_soft not-exist data/broken
-    fi
-    ln_soft foo.txt data/dir1/symlink
-    ln_hard data/dir1/foo.txt data/dir1/hardlink
-
-
-    echo "PART1" > data/sparse
-    dd of=data/sparse if=/dev/null bs=1024k seek=1 count=1 &> /dev/null
-    echo "PART2" >> data/sparse
-
-    popd &> /dev/null
-}
-
-modify_orig () {
-    DIR=$1
-    SRC=$2
-
-    mkdir -p $DIR
-    # Extract old data
-    tar xf $SRC -C $DIR
-    pushd $DIR &> /dev/null
-
-    # Modify it
-    echo newdata > data/newfile
-    mv data/dir1/move.txt data/dir2/move.txt
-
-    echo bar >> data/dir1/bar.txt
-    mv data/dir1/bar.txt data/dir1/bar.TXT # Rename we should pick up
-    ln_hard data/dir1/foo.txt data/dir1/hardlink2
-
-    popd &> /dev/null
-}
-
-compress_tar () {
-    FILE=$1
-    gzip -k $FILE
-    bzip2 -k $FILE
-}
-
-create_tar () {
-    FILE=$1
-    DIR=$2
-    tar cf $FILE --sparse -C $DIR data
-    compress_tar $FILE
-}
 
 # --- Basic single-layer test ---
 

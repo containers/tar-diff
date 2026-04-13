@@ -1,3 +1,6 @@
 cmd/tar-diff/tar-diff
 cmd/tar-patch/tar-patch
 .secrets
+tar-diff
+tar-patch
+test/

@@ -3,7 +3,8 @@ PROJECT := tar-diff
 VERSION := $(shell grep -oP 'VERSION\s*=\s*"\K[^"]+' pkg/protocol/version.go)
 
 PROJ_TARBALL := $(PROJECT)_$(VERSION).tar.gz
-GOCOVERDIR := $(CURDIR)/test/coverage
+TEST_DIR := $(CURDIR)/test
+GOCOVERDIR := $(TEST_DIR)/coverage
 
 
 .PHONY: all build clean fmt install lint test tools dist unit-test integration-test validate .install.golangci-lint
@@ -61,10 +62,15 @@ tools: .install.golangci-lint
 clean:
 	rm -f tar-diff tar-patch
 	rm -rf $(PROJECT)_$(VERSION) $(PROJ_TARBALL)
-	rm -rf $(GOCOVERDIR)
+	rm -rf $(TEST_DIR)
 
 integration-test: build
 	GOCOVERDIR=$(GOCOVERDIR) tests/test.sh
+	GOCOVERDIR=$(GOCOVERDIR) tests/test-multi-old.sh
+	GOCOVERDIR=$(GOCOVERDIR) tests/test-source-prefix.sh
+	GOCOVERDIR=$(GOCOVERDIR) tests/test-delta-paths.sh
+	GOCOVERDIR=$(GOCOVERDIR) tests/test-tar-errors.sh
+	GOCOVERDIR=$(GOCOVERDIR) tests/test-fuzzy-abs.sh
 	go tool covdata percent -i=$(GOCOVERDIR) -o=$(GOCOVERDIR)/integration.out
 
 
