@@ -358,6 +358,10 @@ func AnalyzeSources(oldTarFiles []io.ReadSeeker, options *Options) (*SourceAnaly
 // they are independent readers then that allows concurrent calls from
 // multiple goroutines.
 func DiffWithSources(sources *SourceAnalysis, oldTarFiles []io.ReadSeeker, newTarFile io.ReadSeeker, diffFile io.Writer, options *Options) error {
+	if sources == nil {
+		return fmt.Errorf("sources cannot be nil")
+	}
+
 	if options == nil {
 		options = NewOptions()
 	}
