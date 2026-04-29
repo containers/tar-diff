@@ -7,24 +7,29 @@ on:
     branches: [ main ]
   schedule:
     - cron: '0 6 * * *'
+
+permissions:
+  contents: read
+
 env:
   GOTOOLCHAIN: auto
+
 jobs:
   vulnerability-scan:
     name: Vulnerability Scanning
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
     - name: Set up Go
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
       with:
         go-version: 'stable'
         check-latest: true
 
     - name: Install govulncheck
-      run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      run: go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
 
     - name: Run govulncheck
       run: govulncheck ./...
@@ -36,7 +41,7 @@ jobs:
       actions: read
       contents: read
       security-events: write
-    
+
     strategy:
       fail-fast: false
       matrix:
@@ -44,24 +49,24 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
     - name: Set up Go
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
       with:
         go-version: 'stable'
         check-latest: true
 
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v4
+      uses: github/codeql-action/init@e46ed2cbd01164d986452f91f178727624ae40d7 # v4
       with:
         languages: ${{ matrix.language }}
         queries: security-and-quality
 
     - name: Autobuild
-      uses: github/codeql-action/autobuild@v4
+      uses: github/codeql-action/autobuild@e46ed2cbd01164d986452f91f178727624ae40d7 # v4
 
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v4
+      uses: github/codeql-action/analyze@e46ed2cbd01164d986452f91f178727624ae40d7 # v4
       with:
         category: "/language:${{matrix.language}}"
