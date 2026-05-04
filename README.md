@@ -49,13 +49,13 @@ $ tar-patch delta.tardiff extracted/ reconstructed.tar
 
 This ensures the delta only references files that will be available in the extracted directory.
 
-This is particularly useful for e.g. bootc images, where only the files in the ostree repo
-will be available on the system. For that case you would run tar-diff with
-`--source-prefix=sysroot/ostree/repo/objects/`
+This is particularly useful for `bootc` images, for example, where only the files in the `ostree` repository
+will be available on the system. In that case you would run `tar-diff` with
+`--source-prefix=sysroot/ostree/repo/objects/`.
 
 ## Build requirements
 
-- golang >= 1.25 (see [`go.mod`](go.mod))
+- golang >= 1.26 (see [`go.mod`](go.mod))
 - `make`
 - `tar`
 - `diffutils`, `bzip2`, `gzip` (for tests)
@@ -73,6 +73,10 @@ to reconstruct and validate the current version of the image.
 Delta compression is based on [bsdiff](http://www.daemonology.net/bsdiff/) and [zstd compression](https://facebook.github.io/zstd/).
 
 The `tar-diff` file format is described in [file-format.md](file-format.md).
+
+## Contributing to `tar-diff`
+
+Interested in collaborating on `tar-diff`? Check out our [`CONTRIBUTING.md`](CONTRIBUTING.md) guide to help get you started!
 
 ## License
 
