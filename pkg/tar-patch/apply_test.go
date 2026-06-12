@@ -582,6 +582,41 @@ func TestFilesystemDataSource_SetCurrentFile_NotFound(t *testing.T) {
 	}
 }
 
+func TestFilesystemDataSource_SetCurrentFileCloseError(t *testing.T) {
+	tempDir := t.TempDir()
+	testFile1 := "test1.txt"
+	testFile2 := "test2.txt"
+
+	filePath1 := filepath.Join(tempDir, testFile1)
+	filePath2 := filepath.Join(tempDir, testFile2)
+	if err := os.WriteFile(filePath1, []byte("content1"), 0644); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+	if err := os.WriteFile(filePath2, []byte("content2"), 0644); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	ds := NewFilesystemDataSource(tempDir)
+	if err := ds.SetCurrentFile(testFile1); err != nil {
+		t.Fatalf("SetCurrentFile failed: %v", err)
+	}
+
+	// Close the file directly to force an error when SetCurrentFile tries to close it
+	if err := ds.currentFile.Close(); err != nil {
+		t.Fatalf("failed to pre-close file: %v", err)
+	}
+
+	// Now SetCurrentFile should return an error when trying to close the already-closed file
+	err := ds.SetCurrentFile(testFile2)
+	if err == nil {
+		t.Fatal("expected error from SetCurrentFile when closing already-closed file, got nil")
+	}
+
+	if ds.currentFile == nil {
+		t.Fatal("currentFile should not be nil after a failed Close()")
+	}
+}
+
 func TestFilesystemDataSource_Read(t *testing.T) {
 	tempDir := t.TempDir()
 	testFile := "test.txt"
