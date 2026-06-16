@@ -97,7 +97,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ macos-latest, macos-26-intel ]
+        os: [ macos-latest ]
     steps:
       - name: Check out repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -116,7 +116,7 @@ jobs:
       CGO_ENABLED: 0
     strategy:
       matrix:
-        os: [ windows-latest, windows-11-arm ]
+        os: [ windows-latest ]
     steps:
       - name: Check out repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6

@@ -66,10 +66,11 @@ func (f *FilesystemDataSource) Read(data []byte) (n int, err error) {
 func (f *FilesystemDataSource) SetCurrentFile(file string) error {
 	if f.currentFile != nil {
 		err := f.currentFile.Close()
-		f.currentFile = nil
 		if err != nil {
-			return nil
+			// Don't nil out currentFile if close fails
+			return fmt.Errorf("failed to close current file: %w", err)
 		}
+		f.currentFile = nil
 	}
 	currentFile, err := os.Open(filepath.Join(f.basePath, file))
 	if err != nil {
