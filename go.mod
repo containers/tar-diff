@@ -4,7 +4,7 @@ go 1.26
 
 require (
 	github.com/containers/image/v5 v5.36.2
-	github.com/klauspost/compress v1.18.6
+	github.com/klauspost/compress v1.19.0
 )
 
 require (
