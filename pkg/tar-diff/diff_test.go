@@ -284,8 +284,15 @@ func TestNewOptions(t *testing.T) {
 
 	if options == nil {
 		t.Fatal("NewOptions() returned nil")
-	} else if options.compressionLevel != 3 {
+	}
+	if options.compressionLevel != 3 {
 		t.Errorf("Expected default compression level 3, got %d", options.compressionLevel)
+	}
+	if options.binaryDiffMethod != BinaryDiffBsdiff {
+		t.Errorf("Expected default BinaryDiffBsdiff, got %v", options.binaryDiffMethod)
+	}
+	if options.maxZstdDiffSize != defaultMaxZstdDiffSize {
+		t.Errorf("Expected default max zstd diff size %d, got %d", defaultMaxZstdDiffSize, options.maxZstdDiffSize)
 	}
 }
 
@@ -305,6 +312,16 @@ func TestOptionsSetMaxBsdiffFileSize(t *testing.T) {
 	options.SetMaxBsdiffFileSize(newSize)
 	if options.maxBsdiffSize != newSize {
 		t.Errorf("Expected max bsdiff file size %d, got %d", newSize, options.maxBsdiffSize)
+	}
+}
+
+func TestOptionsSetMaxZstdDiffFileSize(t *testing.T) {
+	options := NewOptions()
+
+	newSize := int64(64 * 1024 * 1024)
+	options.SetMaxZstdDiffFileSize(newSize)
+	if options.maxZstdDiffSize != newSize {
+		t.Errorf("Expected max zstd diff file size %d, got %d", newSize, options.maxZstdDiffSize)
 	}
 }
 

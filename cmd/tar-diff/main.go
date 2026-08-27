@@ -25,8 +25,12 @@ func (p *prefixList) Set(value string) error {
 }
 
 var version = flag.Bool("version", false, "Show version")
-var compressionLevel = flag.Int("compression-level", 3, "zstd compression level")
-var maxBsdiffSize = flag.Int("max-bsdiff-size", 192, "Max file size in megabytes to consider using bsdiff, or 0 for no limit")
+var compressionLevel = flag.Int("compression-level", 3, "zstd compression level for the outer delta stream")
+var maxBsdiffSize = flag.Int("max-bsdiff-size", 192, "Max file size in megabytes to consider for bsdiff, or 0 for no limit")
+var maxZstdDiffSize = flag.Int("max-zstd-diff-size", 128, "Max file size in megabytes to consider for zstd dictionary patches, or 0 for no extra cap")
+var binaryDiff = flag.String("binary-diff", "bsdiff", "Per-file binary diff method: bsdiff, zstd, or auto")
+var zstdDiffLevel = flag.Int("zstd-diff-level", -1, "zstd level for dictionary patches (-1 = use --compression-level)")
+var zstdDiffWindow = flag.Int("zstd-diff-window", 0, "zstd window size in MiB for dictionary patches (0 = auto from source size, max 512)")
 var tmpDir = flag.String("tmp-dir", defaultTmpDir, "Directory for temporary files")
 var applyWhiteouts = flag.Bool("apply-whiteouts", false, "Apply docker/OCI whiteout files when analyzing old tar layers")
 var sourcePrefixes prefixList
@@ -94,6 +98,24 @@ func realMain() int {
 	options := tardiff.NewOptions()
 	options.SetCompressionLevel(*compressionLevel)
 	options.SetMaxBsdiffFileSize(int64(*maxBsdiffSize) * 1024 * 1024)
+	options.SetMaxZstdDiffFileSize(int64(*maxZstdDiffSize) * 1024 * 1024)
+	switch *binaryDiff {
+	case "bsdiff":
+		options.SetBinaryDiffMethod(tardiff.BinaryDiffBsdiff)
+	case "zstd":
+		options.SetBinaryDiffMethod(tardiff.BinaryDiffZstd)
+	case "auto":
+		options.SetBinaryDiffMethod(tardiff.BinaryDiffAuto)
+	default:
+		log.Printf("Error: invalid --binary-diff %q (want bsdiff, zstd, or auto)", *binaryDiff)
+		return 1
+	}
+	options.SetZstdDiffLevel(*zstdDiffLevel)
+	if *zstdDiffWindow < 0 {
+		log.Printf("Error: invalid --zstd-diff-window %d", *zstdDiffWindow)
+		return 1
+	}
+	options.SetZstdDiffWindow(*zstdDiffWindow * 1024 * 1024)
 	if len(sourcePrefixes) > 0 {
 		options.SetSourcePrefixes(sourcePrefixes)
 	}

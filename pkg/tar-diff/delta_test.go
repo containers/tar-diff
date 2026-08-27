@@ -9,7 +9,7 @@ import (
 func TestNewDeltaWriter(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}
@@ -40,7 +40,7 @@ func TestNewDeltaWriter(t *testing.T) {
 func TestDeltaWriterClose(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestDeltaWriterClose(t *testing.T) {
 func TestDeltaWriterWriteContent(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestDeltaWriterWriteContent(t *testing.T) {
 func TestDeltaWriterFlushBuffer(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestDeltaWriterFlushBuffer(t *testing.T) {
 func TestDeltaWriterSetCurrentFile(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}
@@ -158,7 +158,7 @@ func TestDeltaWriterSetCurrentFile(t *testing.T) {
 func TestDeltaWriterSeek(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}
@@ -182,7 +182,7 @@ func TestDeltaWriterSeek(t *testing.T) {
 func TestDeltaWriterSeekForward(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}
@@ -209,7 +209,7 @@ func TestDeltaWriterSeekForward(t *testing.T) {
 func TestDeltaWriterCopyFile(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}
@@ -236,7 +236,7 @@ func TestDeltaWriterCopyFile(t *testing.T) {
 func TestDeltaWriterWriteAddContent(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}
@@ -263,7 +263,7 @@ func TestDeltaWriterWriteAddContent(t *testing.T) {
 func TestDeltaWriterWriteOldFile(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}
@@ -293,7 +293,7 @@ func TestDeltaWriterWriteOldFile(t *testing.T) {
 func TestDeltaWriterWrite(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}
@@ -322,7 +322,7 @@ func TestDeltaWriterWrite(t *testing.T) {
 func TestDeltaWriterCopyFileAt(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}
@@ -349,7 +349,7 @@ func TestDeltaWriterCopyFileAt(t *testing.T) {
 func TestDeltaWriterWriteOp(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}
@@ -382,10 +382,26 @@ func TestDeltaWriterWriteOp(t *testing.T) {
 	t.Logf("writeOp wrote %d bytes (op + data + header)", output.Len()-initialLen)
 }
 
+func TestDeltaWriterV2Header(t *testing.T) {
+	var output bytes.Buffer
+
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV2)
+	if err != nil {
+		t.Fatalf("newDeltaWriter failed: %v", err)
+	}
+	if err := deltaWriter.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	if !bytes.Equal(output.Bytes()[:len(protocol.DeltaHeaderv2)], protocol.DeltaHeaderv2[:]) {
+		t.Fatalf("expected v2 header, got %q", output.Bytes()[:8])
+	}
+}
+
 func TestDeltaWriterLargeContent(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}
@@ -417,7 +433,7 @@ func TestDeltaWriterLargeContent(t *testing.T) {
 func TestDeltaWriterSetCurrentFileTwice(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}

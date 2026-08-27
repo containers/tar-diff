@@ -93,7 +93,7 @@ func TestBsdiffBasic(t *testing.T) {
 	// and produces output, but cannot verify correctness without a bspatch implementation.
 	// The bsdiff algorithm is well-tested upstream; these tests ensure integration works.
 	var output bytes.Buffer
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("Failed to create delta writer: %v", err)
 	}
@@ -126,7 +126,7 @@ func TestBsdiffBasic(t *testing.T) {
 
 func TestBsdiffIdentical(t *testing.T) {
 	var output bytes.Buffer
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("Failed to create delta writer: %v", err)
 	}
@@ -158,7 +158,7 @@ func TestBsdiffIdentical(t *testing.T) {
 
 func TestBsdiffEmpty(t *testing.T) {
 	var output bytes.Buffer
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("Failed to create delta writer: %v", err)
 	}
@@ -197,7 +197,7 @@ func TestBsdiffEmpty(t *testing.T) {
 
 func TestBsdiffLargeData(t *testing.T) {
 	var output bytes.Buffer
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("Failed to create delta writer: %v", err)
 	}
@@ -259,7 +259,7 @@ func TestSplitFunction(t *testing.T) {
 
 func TestBsdiffPartialMatch(t *testing.T) {
 	var output bytes.Buffer
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("Failed to create delta writer: %v", err)
 	}

@@ -53,6 +53,14 @@ This is particularly useful for `bootc` images, for example, where only the file
 will be available on the system. In that case you would run `tar-diff` with
 `--source-prefix=sysroot/ostree/repo/objects/`.
 
+### Mixing zstd and bsdiff
+
+By default `tar-diff` uses bsdiff for similar files. `--binary-diff auto` uses zstd dictionary patches for files under `--max-zstd-diff-size` (apply holds the old file in RAM as the dictionary) and bsdiff for larger files. The default method remains `bsdiff`. `--binary-diff auto` and `zstd` write the `tardf2` magic; see [file-format.md](file-format.md).
+
+```
+$ tar-diff --binary-diff auto --max-zstd-diff-size 128 --max-bsdiff-size 0 old.tar new.tar delta.tardiff
+```
+
 ## Build requirements
 
 - golang >= 1.26 (see [`go.mod`](go.mod))

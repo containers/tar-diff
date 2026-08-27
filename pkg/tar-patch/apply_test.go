@@ -17,22 +17,31 @@ import (
 // Helper to create delta streams for testing
 func createDeltaStream(t *testing.T, ops []deltaOp) *bytes.Buffer {
 	t.Helper()
+	header := protocol.DeltaHeader
+	for _, op := range ops {
+		if op.code == protocol.DeltaOpZstdDict {
+			header = protocol.DeltaHeaderv2
+			break
+		}
+	}
+	return createDeltaStreamWithHeader(t, header, ops)
+}
+
+func createDeltaStreamWithHeader(t *testing.T, header [8]byte, ops []deltaOp) *bytes.Buffer {
+	t.Helper()
 
 	var buf bytes.Buffer
 
-	// Write header
-	_, err := buf.Write(protocol.DeltaHeader[:])
+	_, err := buf.Write(header[:])
 	if err != nil {
 		t.Fatalf("failed to write delta header: %v", err)
 	}
 
-	// Create zstd encoder
 	encoder, err := zstd.NewWriter(&buf)
 	if err != nil {
 		t.Fatalf("failed to create zstd encoder: %v", err)
 	}
 
-	// Write operations
 	for _, op := range ops {
 		opBuf := make([]byte, 1+binary.MaxVarintLen64)
 		opBuf[0] = op.code
@@ -290,6 +299,77 @@ func TestApply_DeltaOpSeek(t *testing.T) {
 	expected := []byte("567")
 	if !bytes.Equal(output.Bytes(), expected) {
 		t.Errorf("expected output %q, got %q", expected, output.Bytes())
+	}
+}
+
+func TestApply_DeltaOpZstdDict(t *testing.T) {
+	filename := "base.txt"
+	oldData := []byte("The quick brown fox jumps over the lazy dog")
+	newData := []byte("The quick red fox runs over the lazy cat")
+
+	enc, err := zstd.NewWriter(nil,
+		zstd.WithEncoderLevel(zstd.SpeedDefault),
+		zstd.WithEncoderDictRaw(0, oldData),
+		zstd.WithEncoderConcurrency(1),
+	)
+	if err != nil {
+		t.Fatalf("create encoder: %v", err)
+	}
+	frame := enc.EncodeAll(newData, nil)
+	if err := enc.Close(); err != nil {
+		t.Fatalf("close encoder: %v", err)
+	}
+
+	delta := createDeltaStream(t, []deltaOp{
+		{code: protocol.DeltaOpOpen, size: uint64(len(filename)), data: []byte(filename)},
+		{code: protocol.DeltaOpZstdDict, size: uint64(len(frame)), data: frame},
+	})
+
+	var output bytes.Buffer
+	ds := newMockDataSource()
+	ds.AddFile(filename, oldData)
+
+	if err := Apply(delta, ds, &output); err != nil {
+		t.Fatalf("Apply failed: %v", err)
+	}
+	if !bytes.Equal(output.Bytes(), newData) {
+		t.Errorf("expected output %q, got %q", newData, output.Bytes())
+	}
+}
+
+func TestApply_ZstdDictRejectedOnV1(t *testing.T) {
+	filename := "base.txt"
+	oldData := []byte("The quick brown fox jumps over the lazy dog")
+	newData := []byte("The quick red fox runs over the lazy cat")
+
+	enc, err := zstd.NewWriter(nil,
+		zstd.WithEncoderLevel(zstd.SpeedDefault),
+		zstd.WithEncoderDictRaw(0, oldData),
+		zstd.WithEncoderConcurrency(1),
+	)
+	if err != nil {
+		t.Fatalf("create encoder: %v", err)
+	}
+	frame := enc.EncodeAll(newData, nil)
+	if err := enc.Close(); err != nil {
+		t.Fatalf("close encoder: %v", err)
+	}
+
+	delta := createDeltaStreamWithHeader(t, protocol.DeltaHeader, []deltaOp{
+		{code: protocol.DeltaOpOpen, size: uint64(len(filename)), data: []byte(filename)},
+		{code: protocol.DeltaOpZstdDict, size: uint64(len(frame)), data: frame},
+	})
+
+	var output bytes.Buffer
+	ds := newMockDataSource()
+	ds.AddFile(filename, oldData)
+
+	err = Apply(delta, ds, &output)
+	if err == nil {
+		t.Fatal("expected error for ZstdDict on v1 header")
+	}
+	if !strings.Contains(err.Error(), "tardf2") {
+		t.Errorf("expected tardf2 error, got: %v", err)
 	}
 }
 

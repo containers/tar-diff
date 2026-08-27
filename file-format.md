@@ -2,11 +2,17 @@ File Format
 -----------
 
 A tar-diff file (media type `application/vnd.tar-diff`) consists of a
-header, with the fixed bytes:
+header, with one of:
 
 ```
-{ 't', 'a', 'r', 'd', 'f', '1', '\n', 0}
+{ 't', 'a', 'r', 'd', 'f', '1', '\n', 0}   // v1
+{ 't', 'a', 'r', 'd', 'f', '2', '\n', 0}   // v2
 ```
+
+v2 is required if the file contains any `DeltaOpZstdDict` operation.
+Generators emit v2 whenever zstd-dict ops are possible (`--binary-diff
+auto` or `zstd`), even if a particular delta happens to contain none.
+v1 files must not contain `DeltaOpZstdDict`.
 
 Followed by a [zstd](https://facebook.github.io/zstd/) compressed
 stream, with a sequence of operations, each operation is encoded as
@@ -42,6 +48,7 @@ DeltaOpOpen = 1
 DeltaOpCopy = 2
 DeltaOpAddData = 3
 DeltaOpSeek = 4
+DeltaOpZstdDict = 5
 ```
 
 ***DeltaOpData***
@@ -49,8 +56,9 @@ Emit the bytes from `<data>` into the output stream.
 
 ***DeltaOpOpen***
 `<data>` is a the (relative) path to a file within the original
-tarball. Set the source for subsequent `DeltaOpCopy` and `DeltaAddData`
-operations to this file, and reset the source position to 0.
+tarball. Set the source for subsequent `DeltaOpCopy`, `DeltaAddData`,
+and `DeltaOpZstdDict` operations to this file, and reset the source
+position to 0.
 
 Tar-diff generates normalized paths with no `.` or `..`  elements,
 which this will never point outside the target directory. However, for
@@ -68,3 +76,12 @@ stream.
 
 ***DeltaOpSeek***
 Set the source position to `<size>`
+
+***DeltaOpZstdDict***
+Only valid in v2 files. `<data>` is a zstd frame compressed with the
+currently open source file as a raw dictionary (dict id 0), matching
+`zstd --patch-from` semantics. Seek the source file to offset 0,
+decompress `<data>` using the full source file content as the
+dictionary, and emit the decompressed bytes to the output stream.
+Generators cap the zstd window at 512 MiB so older apply
+implementations can still decode the frame.
