@@ -245,6 +245,54 @@ func TestDiffAutoMixesZstdAndBsdiff(t *testing.T) {
 	}
 }
 
+func TestDiffApplyZstdThenCopySameSource(t *testing.T) {
+	shared := bytes.Repeat([]byte("The quick brown fox jumps over the lazy dog\n"), 40)
+	changed := append([]byte{}, shared...)
+	changed[10] ^= 0xff
+
+	oldTar, err := createTestTar([]tarEntry{
+		{name: "shared.txt", typeflag: tar.TypeReg, data: shared},
+	})
+	if err != nil {
+		t.Fatalf("create old tar: %v", err)
+	}
+	newTar, err := createTestTar([]tarEntry{
+		{name: "shared.txt", typeflag: tar.TypeReg, data: changed},
+		{name: "copy.txt", typeflag: tar.TypeReg, data: shared},
+	})
+	if err != nil {
+		t.Fatalf("create new tar: %v", err)
+	}
+	wantNew, err := io.ReadAll(newTar)
+	if err != nil {
+		t.Fatalf("read new tar: %v", err)
+	}
+	if _, err := newTar.Seek(0, 0); err != nil {
+		t.Fatalf("seek new tar: %v", err)
+	}
+
+	var delta bytes.Buffer
+	options := NewOptions()
+	options.SetBinaryDiffMethod(BinaryDiffZstd)
+	if err := Diff([]io.ReadSeeker{oldTar}, newTar, &delta, options); err != nil {
+		t.Fatalf("Diff failed: %v", err)
+	}
+
+	tmpDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmpDir, "shared.txt"), shared, 0o644); err != nil {
+		t.Fatalf("write source file: %v", err)
+	}
+	var reconstructed bytes.Buffer
+	ds := tarpatch.NewFilesystemDataSource(tmpDir)
+	defer func() { _ = ds.Close() }()
+	if err := tarpatch.Apply(&delta, ds, &reconstructed); err != nil {
+		t.Fatalf("Apply failed: %v", err)
+	}
+	if !bytes.Equal(reconstructed.Bytes(), wantNew) {
+		t.Fatalf("reconstructed tar mismatch (%d vs %d bytes)", reconstructed.Len(), len(wantNew))
+	}
+}
+
 func TestOptionsSetBinaryDiffMethod(t *testing.T) {
 	options := NewOptions()
 	if options.binaryDiffMethod != BinaryDiffBsdiff {

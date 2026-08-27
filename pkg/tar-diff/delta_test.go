@@ -290,6 +290,30 @@ func TestDeltaWriterWriteOldFile(t *testing.T) {
 	}
 }
 
+func TestDeltaWriterWriteZstdDictSetsCurrentPos(t *testing.T) {
+	var output bytes.Buffer
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV2)
+	if err != nil {
+		t.Fatalf("newDeltaWriter failed: %v", err)
+	}
+	defer func() {
+		if err := deltaWriter.Close(); err != nil {
+			t.Logf("Failed to close deltaWriter: %v", err)
+		}
+	}()
+
+	sourceSize := uint64(4096)
+	if err := deltaWriter.SetCurrentFile("shared.txt"); err != nil {
+		t.Fatalf("SetCurrentFile failed: %v", err)
+	}
+	if err := deltaWriter.WriteZstdDict([]byte("fake-zstd-frame"), sourceSize); err != nil {
+		t.Fatalf("WriteZstdDict failed: %v", err)
+	}
+	if deltaWriter.currentPos != sourceSize {
+		t.Fatalf("currentPos after WriteZstdDict = %d, want %d", deltaWriter.currentPos, sourceSize)
+	}
+}
+
 func TestDeltaWriterWrite(t *testing.T) {
 	var output bytes.Buffer
 

@@ -214,12 +214,16 @@ func (d *deltaWriter) WriteOldFile(filename string, size uint64) error {
 	return nil
 }
 
-func (d *deltaWriter) WriteZstdDict(data []byte) error {
+func (d *deltaWriter) WriteZstdDict(data []byte, sourceSize uint64) error {
 	if err := d.FlushBuffer(); err != nil {
 		return err
 	}
-
-	return d.writeOp(protocol.DeltaOpZstdDict, uint64(len(data)), data)
+	if err := d.writeOp(protocol.DeltaOpZstdDict, uint64(len(data)), data); err != nil {
+		return err
+	}
+	// Apply reads the whole source as the dict, leaving the cursor at EOF.
+	d.currentPos = sourceSize
+	return nil
 }
 
 func (d *deltaWriter) Write(data []byte) (int, error) {

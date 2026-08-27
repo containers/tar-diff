@@ -150,7 +150,7 @@ func (g *deltaGenerator) generateForFileWithZstd(info *targetInfo) error {
 		return err
 	}
 
-	return g.deltaWriter.WriteZstdDict(patch)
+	return g.deltaWriter.WriteZstdDict(patch, uint64(source.file.size))
 }
 
 func (g *deltaGenerator) generateForFileWithrollsums(info *targetInfo) error {

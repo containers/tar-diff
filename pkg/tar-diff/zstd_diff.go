@@ -60,11 +60,11 @@ func zstdFitsLimits(fileSize, sourceSize, maxZstd int64) bool {
 	return fileSize < maxZstd && sourceSize < maxZstd
 }
 
-func sizeWithinLimit(size, max int64) bool {
-	if max == 0 {
+func sizeWithinLimit(size, limit int64) bool {
+	if limit == 0 {
 		return true
 	}
-	return size < max
+	return size < limit
 }
 
 // zstdWindowSize picks a power-of-two window large enough for the source
