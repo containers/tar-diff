@@ -55,8 +55,8 @@ install: tar-diff tar-patch
 tools: .install.golangci-lint
 
 .install.golangci-lint:
-	if [ ! -x "$(GOBIN)/golangci-lint" ]; then \
-		curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/main/install.sh | sh -s -- -b $(GOBIN) v2.10.1; \
+	if [ ! -x "$(GOBIN)/golangci-lint" ] || ! "$(GOBIN)/golangci-lint" version 2>/dev/null | grep -q 'v2.13.1'; then \
+		curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/main/install.sh | sh -s -- -b $(GOBIN) v2.13.1; \
 	fi
 
 clean:

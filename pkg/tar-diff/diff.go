@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 
 	"github.com/containers/image/v5/pkg/compression"
 )
 
 const (
-	defaultMaxBsdiffSize = 192 * 1024 * 1024
+	defaultMaxBsdiffSize   = 192 * 1024 * 1024
+	defaultMaxZstdDiffSize = 128 * 1024 * 1024
 )
 
 type deltaGenerator struct {
@@ -100,6 +102,55 @@ func (g *deltaGenerator) generateForFileWithBsdiff(info *targetInfo) error {
 	return nil
 }
 
+func (g *deltaGenerator) generateForFileWithZstd(info *targetInfo) error {
+	file := info.file
+	source := info.source
+
+	oldData, err := g.readSourceData(source, 0, source.file.size)
+	if err != nil {
+		return err
+	}
+
+	windowSize, err := zstdWindowSize(len(oldData), g.options.zstdDiffWindow)
+	if err != nil {
+		return err
+	}
+
+	g.setSkip(true)
+	tmp, err := os.CreateTemp(g.options.tmpDir, "tar-diff-zstd-new-")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
+	}()
+
+	if _, err := io.Copy(tmp, io.LimitReader(g.tarReader, file.size)); err != nil {
+		return err
+	}
+	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+
+	patch, err := zstdPatchFrom(oldData, tmp, g.options.effectiveZstdDiffLevel(), windowSize)
+	if err != nil {
+		return err
+	}
+
+	if int64(len(patch)) >= file.size {
+		if _, err := tmp.Seek(0, io.SeekStart); err != nil {
+			return err
+		}
+		return g.deltaWriter.WriteContentFrom(tmp)
+	}
+
+	if err := g.deltaWriter.SetCurrentFile(info.source.sourcePath); err != nil {
+		return err
+	}
+	return g.deltaWriter.WriteZstdDict(patch, uint64(source.file.size))
+}
+
 func (g *deltaGenerator) generateForFileWithrollsums(info *targetInfo) error {
 	file := info.file
 	source := info.source
@@ -156,8 +207,7 @@ func (g *deltaGenerator) generateForFileWithrollsums(info *targetInfo) error {
 func (g *deltaGenerator) generateForFile(info *targetInfo) error {
 	file := info.file
 	sourceFile := info.source.file
-
-	maxBsdiffSize := g.options.maxBsdiffSize
+	method := g.options.binaryDiffMethod
 
 	// For files that are smaller than the path to the delta source plus some small
 	// space for the delta header, skip doing deltas, as delta data will be larger
@@ -176,11 +226,10 @@ func (g *deltaGenerator) generateForFile(info *targetInfo) error {
 		if err := g.skipRest(); err != nil {
 			return err
 		}
-	case maxBsdiffSize == 0 || (file.size < maxBsdiffSize && sourceFile.size < maxBsdiffSize):
-		// Use bsdiff to generate delta
-		if err := g.generateForFileWithBsdiff(info); err != nil {
-			return err
-		}
+	case (method == BinaryDiffZstd || method == BinaryDiffAuto) && zstdFitsLimits(file.size, sourceFile.size, g.options.maxZstdDiffSize):
+		return g.generateForFileWithZstd(info)
+	case (method == BinaryDiffBsdiff || method == BinaryDiffAuto) && sizeWithinLimit(file.size, g.options.maxBsdiffSize) && sizeWithinLimit(sourceFile.size, g.options.maxBsdiffSize):
+		return g.generateForFileWithBsdiff(info)
 	case info.rollsumMatches != nil && info.rollsumMatches.matchRatio > 20:
 		// Use rollsums to generate delta
 		if err := g.generateForFileWithrollsums(info); err != nil {
@@ -205,7 +254,11 @@ func generateDelta(newFile io.ReadSeeker, deltaFile io.Writer, analysis *deltaAn
 		}
 	}()
 
-	deltaWriter, err := newDeltaWriter(deltaFile, options.compressionLevel)
+	version := deltaFormatV1
+	if options.binaryDiffMethod == BinaryDiffZstd || options.binaryDiffMethod == BinaryDiffAuto {
+		version = deltaFormatV2
+	}
+	deltaWriter, err := newDeltaWriter(deltaFile, options.compressionLevel, version)
 	if err != nil {
 		return err
 	}
@@ -262,17 +315,33 @@ func generateDelta(newFile io.ReadSeeker, deltaFile io.Writer, analysis *deltaAn
 	return nil
 }
 
+// BinaryDiffMethod selects the per-file binary diff algorithm for similar files.
+type BinaryDiffMethod int
+
+const (
+	// BinaryDiffBsdiff uses the classic bsdiff algorithm (default).
+	BinaryDiffBsdiff BinaryDiffMethod = iota
+	// BinaryDiffZstd uses zstd dictionary compression (zstd --patch-from semantics).
+	BinaryDiffZstd
+	// BinaryDiffAuto uses zstd under the zstd size cap, then bsdiff under the bsdiff cap.
+	BinaryDiffAuto
+)
+
 // Options configures the behavior of the diff operation.
 type Options struct {
 	compressionLevel     int
 	maxBsdiffSize        int64
+	maxZstdDiffSize      int64
+	binaryDiffMethod     BinaryDiffMethod
+	zstdDiffLevel        int // <0 means use compressionLevel
+	zstdDiffWindow       int // bytes; 0 means auto from source size
 	sourcePrefixes       []string
 	ignoreSourcePrefixes []string
 	tmpDir               string
 	applyWhiteouts       bool
 }
 
-// SetCompressionLevel sets the compression level for the output diff file.
+// SetCompressionLevel sets the zstd compression level for the outer delta stream.
 func (o *Options) SetCompressionLevel(compressionLevel int) {
 	o.compressionLevel = compressionLevel
 }
@@ -280,6 +349,36 @@ func (o *Options) SetCompressionLevel(compressionLevel int) {
 // SetMaxBsdiffFileSize sets the maximum file size for bsdiff operations.
 func (o *Options) SetMaxBsdiffFileSize(maxBsdiffSize int64) {
 	o.maxBsdiffSize = maxBsdiffSize
+}
+
+// SetMaxZstdDiffFileSize sets the maximum file size for zstd dictionary patches.
+// Pass 0 for no extra cap (still limited by zstd.MaxWindowSize).
+func (o *Options) SetMaxZstdDiffFileSize(maxZstdDiffSize int64) {
+	o.maxZstdDiffSize = maxZstdDiffSize
+}
+
+// SetBinaryDiffMethod selects the per-file binary diff backend.
+func (o *Options) SetBinaryDiffMethod(method BinaryDiffMethod) {
+	o.binaryDiffMethod = method
+}
+
+// SetZstdDiffLevel sets the zstd level for per-file dictionary patches.
+// Pass a negative value to reuse SetCompressionLevel.
+func (o *Options) SetZstdDiffLevel(level int) {
+	o.zstdDiffLevel = level
+}
+
+// SetZstdDiffWindow sets the zstd window size in bytes for dictionary patches.
+// Pass 0 to size the window automatically from the source file (power of two).
+func (o *Options) SetZstdDiffWindow(windowBytes int) {
+	o.zstdDiffWindow = windowBytes
+}
+
+func (o *Options) effectiveZstdDiffLevel() int {
+	if o.zstdDiffLevel < 0 {
+		return o.compressionLevel
+	}
+	return o.zstdDiffLevel
 }
 
 // SetSourcePrefixes sets path prefixes to filter which source files can be used for delta.
@@ -313,6 +412,10 @@ func NewOptions() *Options {
 	return &Options{
 		compressionLevel:     3,
 		maxBsdiffSize:        defaultMaxBsdiffSize,
+		maxZstdDiffSize:      defaultMaxZstdDiffSize,
+		binaryDiffMethod:     BinaryDiffBsdiff,
+		zstdDiffLevel:        -1,
+		zstdDiffWindow:       0,
 		sourcePrefixes:       nil,
 		ignoreSourcePrefixes: nil,
 	}

@@ -2,14 +2,34 @@ package tardiff
 
 import (
 	"encoding/binary"
+	"fmt"
+	"io"
+
 	"github.com/containers/tar-diff/pkg/protocol"
 	"github.com/klauspost/compress/zstd"
-	"io"
 )
 
 const (
 	deltaDataChunkSize = 4 * 1024 * 1024
 )
+
+type deltaFormatVersion int
+
+const (
+	deltaFormatV1 deltaFormatVersion = 1
+	deltaFormatV2 deltaFormatVersion = 2
+)
+
+func (v deltaFormatVersion) header() ([]byte, error) {
+	switch v {
+	case deltaFormatV1:
+		return protocol.DeltaHeader[:], nil
+	case deltaFormatV2:
+		return protocol.DeltaHeaderv2[:], nil
+	default:
+		return nil, fmt.Errorf("unsupported delta format version %d", v)
+	}
+}
 
 type deltaWriter struct {
 	writer      *zstd.Encoder
@@ -18,9 +38,12 @@ type deltaWriter struct {
 	currentPos  uint64
 }
 
-func newDeltaWriter(writer io.Writer, compressionLevel int) (*deltaWriter, error) {
-	_, err := writer.Write(protocol.DeltaHeader[:])
+func newDeltaWriter(writer io.Writer, compressionLevel int, version deltaFormatVersion) (*deltaWriter, error) {
+	header, err := version.header()
 	if err != nil {
+		return nil, err
+	}
+	if _, err := writer.Write(header); err != nil {
 		return nil, err
 	}
 
@@ -28,7 +51,10 @@ func newDeltaWriter(writer io.Writer, compressionLevel int) (*deltaWriter, error
 	if err != nil {
 		return nil, err
 	}
-	d := deltaWriter{writer: encoder, buffer: make([]byte, 0, deltaDataChunkSize)}
+	d := deltaWriter{
+		writer: encoder,
+		buffer: make([]byte, 0, deltaDataChunkSize),
+	}
 	return &d, nil
 }
 
@@ -74,12 +100,23 @@ func (d *deltaWriter) Close() error {
 }
 
 func (d *deltaWriter) WriteContent(data []byte) error {
-	d.buffer = append(d.buffer, data...)
-
-	if len(d.buffer) >= deltaDataChunkSize {
-		return d.FlushBuffer()
+	for len(data) > 0 {
+		if len(d.buffer) >= deltaDataChunkSize {
+			if err := d.FlushBuffer(); err != nil {
+				return err
+			}
+		}
+		space := deltaDataChunkSize - len(d.buffer)
+		if space > len(data) {
+			space = len(data)
+		}
+		d.buffer = append(d.buffer, data[:space]...)
+		data = data[space:]
 	}
-	return nil
+	if len(d.buffer) < deltaDataChunkSize {
+		return nil
+	}
+	return d.FlushBuffer()
 }
 
 // Switches to new file if needed and ensures we're at the start of it
@@ -188,8 +225,25 @@ func (d *deltaWriter) WriteOldFile(filename string, size uint64) error {
 	return nil
 }
 
+func (d *deltaWriter) WriteZstdDict(data []byte, sourceSize uint64) error {
+	if err := d.FlushBuffer(); err != nil {
+		return err
+	}
+	if err := d.writeOp(protocol.DeltaOpZstdDict, uint64(len(data)), data); err != nil {
+		return err
+	}
+	// Apply reads the whole source as the dict, leaving the cursor at EOF.
+	d.currentPos = sourceSize
+	return nil
+}
+
 func (d *deltaWriter) Write(data []byte) (int, error) {
 	n := len(data)
 	err := d.WriteContent(data)
 	return n, err
+}
+
+func (d *deltaWriter) WriteContentFrom(r io.Reader) error {
+	_, err := io.Copy(d, r)
+	return err
 }

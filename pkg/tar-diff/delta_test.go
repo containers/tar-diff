@@ -1,15 +1,20 @@
 package tardiff
 
 import (
+	"bufio"
 	"bytes"
-	"github.com/containers/tar-diff/pkg/protocol"
+	"encoding/binary"
+	"io"
 	"testing"
+
+	"github.com/containers/tar-diff/pkg/protocol"
+	"github.com/klauspost/compress/zstd"
 )
 
 func TestNewDeltaWriter(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}
@@ -40,7 +45,7 @@ func TestNewDeltaWriter(t *testing.T) {
 func TestDeltaWriterClose(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}
@@ -75,7 +80,7 @@ func TestDeltaWriterClose(t *testing.T) {
 func TestDeltaWriterWriteContent(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}
@@ -104,7 +109,7 @@ func TestDeltaWriterWriteContent(t *testing.T) {
 func TestDeltaWriterFlushBuffer(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}
@@ -130,7 +135,7 @@ func TestDeltaWriterFlushBuffer(t *testing.T) {
 func TestDeltaWriterSetCurrentFile(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}
@@ -158,7 +163,7 @@ func TestDeltaWriterSetCurrentFile(t *testing.T) {
 func TestDeltaWriterSeek(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}
@@ -182,7 +187,7 @@ func TestDeltaWriterSeek(t *testing.T) {
 func TestDeltaWriterSeekForward(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}
@@ -209,7 +214,7 @@ func TestDeltaWriterSeekForward(t *testing.T) {
 func TestDeltaWriterCopyFile(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}
@@ -236,7 +241,7 @@ func TestDeltaWriterCopyFile(t *testing.T) {
 func TestDeltaWriterWriteAddContent(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}
@@ -263,7 +268,7 @@ func TestDeltaWriterWriteAddContent(t *testing.T) {
 func TestDeltaWriterWriteOldFile(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}
@@ -290,10 +295,34 @@ func TestDeltaWriterWriteOldFile(t *testing.T) {
 	}
 }
 
+func TestDeltaWriterWriteZstdDictSetsCurrentPos(t *testing.T) {
+	var output bytes.Buffer
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV2)
+	if err != nil {
+		t.Fatalf("newDeltaWriter failed: %v", err)
+	}
+	defer func() {
+		if err := deltaWriter.Close(); err != nil {
+			t.Logf("Failed to close deltaWriter: %v", err)
+		}
+	}()
+
+	sourceSize := uint64(4096)
+	if err := deltaWriter.SetCurrentFile("shared.txt"); err != nil {
+		t.Fatalf("SetCurrentFile failed: %v", err)
+	}
+	if err := deltaWriter.WriteZstdDict([]byte("fake-zstd-frame"), sourceSize); err != nil {
+		t.Fatalf("WriteZstdDict failed: %v", err)
+	}
+	if deltaWriter.currentPos != sourceSize {
+		t.Fatalf("currentPos after WriteZstdDict = %d, want %d", deltaWriter.currentPos, sourceSize)
+	}
+}
+
 func TestDeltaWriterWrite(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}
@@ -322,7 +351,7 @@ func TestDeltaWriterWrite(t *testing.T) {
 func TestDeltaWriterCopyFileAt(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}
@@ -349,7 +378,7 @@ func TestDeltaWriterCopyFileAt(t *testing.T) {
 func TestDeltaWriterWriteOp(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}
@@ -382,10 +411,26 @@ func TestDeltaWriterWriteOp(t *testing.T) {
 	t.Logf("writeOp wrote %d bytes (op + data + header)", output.Len()-initialLen)
 }
 
+func TestDeltaWriterV2Header(t *testing.T) {
+	var output bytes.Buffer
+
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV2)
+	if err != nil {
+		t.Fatalf("newDeltaWriter failed: %v", err)
+	}
+	if err := deltaWriter.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	if !bytes.Equal(output.Bytes()[:len(protocol.DeltaHeaderv2)], protocol.DeltaHeaderv2[:]) {
+		t.Fatalf("expected v2 header, got %q", output.Bytes()[:8])
+	}
+}
+
 func TestDeltaWriterLargeContent(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}
@@ -412,12 +457,27 @@ func TestDeltaWriterLargeContent(t *testing.T) {
 	if output.Len() <= initialOutputLen {
 		t.Error("Expected large content to trigger buffer flush and write to output")
 	}
+
+	ops, sizes := decodeDeltaOps(t, output.Bytes())
+	var total uint64
+	for i, op := range ops {
+		if op != protocol.DeltaOpData {
+			t.Fatalf("op %d: got %d, want DeltaOpData", i, op)
+		}
+		if sizes[i] > uint64(deltaDataChunkSize) {
+			t.Fatalf("op %d size %d exceeds chunk %d", i, sizes[i], deltaDataChunkSize)
+		}
+		total += sizes[i]
+	}
+	if total != uint64(len(largeData)) {
+		t.Fatalf("DATA payload %d, want %d", total, len(largeData))
+	}
 }
 
 func TestDeltaWriterSetCurrentFileTwice(t *testing.T) {
 	var output bytes.Buffer
 
-	deltaWriter, err := newDeltaWriter(&output, 1)
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
 	if err != nil {
 		t.Fatalf("newDeltaWriter failed: %v", err)
 	}
@@ -441,5 +501,40 @@ func TestDeltaWriterSetCurrentFileTwice(t *testing.T) {
 
 	if deltaWriter.currentFile != "file2.txt" {
 		t.Errorf("Expected currentFile 'file2.txt', got %s", deltaWriter.currentFile)
+	}
+}
+
+func decodeDeltaOps(t *testing.T, delta []byte) (ops []byte, sizes []uint64) {
+	t.Helper()
+	if len(delta) < len(protocol.DeltaHeader) {
+		t.Fatalf("delta too short: %d", len(delta))
+	}
+	dec, err := zstd.NewReader(bytes.NewReader(delta[len(protocol.DeltaHeader):]))
+	if err != nil {
+		t.Fatalf("zstd decoder: %v", err)
+	}
+	defer dec.Close()
+
+	br := bufio.NewReader(dec)
+	for {
+		op, err := br.ReadByte()
+		if err == io.EOF {
+			return ops, sizes
+		}
+		if err != nil {
+			t.Fatalf("read op: %v", err)
+		}
+		size, err := binary.ReadUvarint(br)
+		if err != nil {
+			t.Fatalf("read size: %v", err)
+		}
+		ops = append(ops, op)
+		sizes = append(sizes, size)
+		if op == protocol.DeltaOpCopy || op == protocol.DeltaOpSeek {
+			continue
+		}
+		if _, err := io.CopyN(io.Discard, br, int64(size)); err != nil {
+			t.Fatalf("skip payload: %v", err)
+		}
 	}
 }

@@ -5,15 +5,19 @@ import "path/filepath"
 
 // Delta operation constants define the types of operations in a delta file.
 const (
-	DeltaOpData    = iota // Raw data operation
-	DeltaOpOpen    = iota // Open file operation
-	DeltaOpCopy    = iota // Copy from source operation
-	DeltaOpAddData = iota // Add new data operation
-	DeltaOpSeek    = iota // Seek operation
+	DeltaOpData     = iota // Raw data operation
+	DeltaOpOpen     = iota // Open file operation
+	DeltaOpCopy     = iota // Copy from source operation
+	DeltaOpAddData  = iota // Add new data operation
+	DeltaOpSeek     = iota // Seek operation
+	DeltaOpZstdDict = iota // zstd dictionary patch against open source file
 )
 
-// DeltaHeader is the magic header bytes for tar-diff files.
+// DeltaHeader is the magic for v1 tar-diff files (no DeltaOpZstdDict).
 var DeltaHeader = [...]byte{'t', 'a', 'r', 'd', 'f', '1', '\n', 0}
+
+// DeltaHeaderv2 is the magic when zstd-dict ops are possible (auto or zstd mode).
+var DeltaHeaderv2 = [...]byte{'t', 'a', 'r', 'd', 'f', '2', '\n', 0}
 
 // CleanPath cleans up the path lexically and prevents path traversal attacks.
 // Any ".." that extends outside the first elements (or the root itself) is invalid and returns "".

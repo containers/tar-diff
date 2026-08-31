@@ -95,7 +95,8 @@ func Apply(delta io.Reader, dataSource DataSource, dst io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if !bytes.Equal(buf, protocol.DeltaHeader[:]) {
+	isV2 := bytes.Equal(buf, protocol.DeltaHeaderv2[:])
+	if !isV2 && !bytes.Equal(buf, protocol.DeltaHeader[:]) {
 		return fmt.Errorf("invalid delta format")
 	}
 
@@ -180,10 +181,40 @@ func Apply(delta io.Reader, dataSource DataSource, dst io.Writer) error {
 			if err != nil {
 				return err
 			}
+		case protocol.DeltaOpZstdDict:
+			if !isV2 {
+				return fmt.Errorf("ZstdDict requires tardf2")
+			}
+			if err := applyZstdDict(r, dataSource, dst, size); err != nil {
+				return err
+			}
 		default:
 			return fmt.Errorf("unexpected delta op %d", op)
 		}
 	}
 
+	return nil
+}
+
+func applyZstdDict(r io.Reader, dataSource DataSource, dst io.Writer, size uint64) error {
+	// Dict is the whole source file; Copy/Seek ops may have left the cursor mid-file.
+	if _, err := dataSource.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+
+	dict, err := io.ReadAll(dataSource)
+	if err != nil {
+		return err
+	}
+
+	decoder, err := zstd.NewReader(io.LimitReader(r, int64(size)), zstd.WithDecoderDictRaw(0, dict), zstd.WithDecoderConcurrency(1))
+	if err != nil {
+		return err
+	}
+	defer decoder.Close()
+
+	if _, err := io.Copy(dst, decoder); err != nil {
+		return fmt.Errorf("ZstdDict decompress: %w", err)
+	}
 	return nil
 }
