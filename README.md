@@ -86,6 +86,13 @@ The `tar-diff` file format is described in [file-format.md](file-format.md).
 
 Interested in collaborating on `tar-diff`? Check out our [`CONTRIBUTING.md`](CONTRIBUTING.md) guide to help get you started!
 
+## Known users
+
+- [Flatpak OCI deltas](https://github.com/flatpak/flatpak-oci-specs/blob/main/image-deltas.md)
+- [Flatpak OCI processing code](https://github.com/flatpak/flatpak/blob/66b038e14809bc973d46e8078a070dc32e894903/common/flatpak-oci-registry.c#L1689)
+- [oci-delta](https://github.com/containers/oci-delta)
+- [composefs-rs implementation of oci-delta](https://github.com/composefs/composefs-rs/blob/main/crates/composefs-oci/src/delta.rs)
+
 ## License
 
 `tar-diff` is licensed under the Apache License, Version 2.0. See
