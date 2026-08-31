@@ -106,10 +106,6 @@ func (g *deltaGenerator) generateForFileWithZstd(info *targetInfo) error {
 	file := info.file
 	source := info.source
 
-	if err := g.deltaWriter.SetCurrentFile(info.source.sourcePath); err != nil {
-		return err
-	}
-
 	oldData, err := g.readSourceData(source, 0, source.file.size)
 	if err != nil {
 		return err
@@ -146,10 +142,12 @@ func (g *deltaGenerator) generateForFileWithZstd(info *targetInfo) error {
 		if _, err := tmp.Seek(0, io.SeekStart); err != nil {
 			return err
 		}
-		_, err := io.Copy(g.deltaWriter, tmp)
-		return err
+		return g.deltaWriter.WriteContentFrom(tmp)
 	}
 
+	if err := g.deltaWriter.SetCurrentFile(info.source.sourcePath); err != nil {
+		return err
+	}
 	return g.deltaWriter.WriteZstdDict(patch, uint64(source.file.size))
 }
 

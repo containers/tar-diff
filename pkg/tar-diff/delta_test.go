@@ -1,9 +1,14 @@
 package tardiff
 
 import (
+	"bufio"
 	"bytes"
-	"github.com/containers/tar-diff/pkg/protocol"
+	"encoding/binary"
+	"io"
 	"testing"
+
+	"github.com/containers/tar-diff/pkg/protocol"
+	"github.com/klauspost/compress/zstd"
 )
 
 func TestNewDeltaWriter(t *testing.T) {
@@ -452,6 +457,21 @@ func TestDeltaWriterLargeContent(t *testing.T) {
 	if output.Len() <= initialOutputLen {
 		t.Error("Expected large content to trigger buffer flush and write to output")
 	}
+
+	ops, sizes := decodeDeltaOps(t, output.Bytes())
+	var total uint64
+	for i, op := range ops {
+		if op != protocol.DeltaOpData {
+			t.Fatalf("op %d: got %d, want DeltaOpData", i, op)
+		}
+		if sizes[i] > uint64(deltaDataChunkSize) {
+			t.Fatalf("op %d size %d exceeds chunk %d", i, sizes[i], deltaDataChunkSize)
+		}
+		total += sizes[i]
+	}
+	if total != uint64(len(largeData)) {
+		t.Fatalf("DATA payload %d, want %d", total, len(largeData))
+	}
 }
 
 func TestDeltaWriterSetCurrentFileTwice(t *testing.T) {
@@ -481,5 +501,40 @@ func TestDeltaWriterSetCurrentFileTwice(t *testing.T) {
 
 	if deltaWriter.currentFile != "file2.txt" {
 		t.Errorf("Expected currentFile 'file2.txt', got %s", deltaWriter.currentFile)
+	}
+}
+
+func decodeDeltaOps(t *testing.T, delta []byte) (ops []byte, sizes []uint64) {
+	t.Helper()
+	if len(delta) < len(protocol.DeltaHeader) {
+		t.Fatalf("delta too short: %d", len(delta))
+	}
+	dec, err := zstd.NewReader(bytes.NewReader(delta[len(protocol.DeltaHeader):]))
+	if err != nil {
+		t.Fatalf("zstd decoder: %v", err)
+	}
+	defer dec.Close()
+
+	br := bufio.NewReader(dec)
+	for {
+		op, err := br.ReadByte()
+		if err == io.EOF {
+			return ops, sizes
+		}
+		if err != nil {
+			t.Fatalf("read op: %v", err)
+		}
+		size, err := binary.ReadUvarint(br)
+		if err != nil {
+			t.Fatalf("read size: %v", err)
+		}
+		ops = append(ops, op)
+		sizes = append(sizes, size)
+		if op == protocol.DeltaOpCopy || op == protocol.DeltaOpSeek {
+			continue
+		}
+		if _, err := io.CopyN(io.Discard, br, int64(size)); err != nil {
+			t.Fatalf("skip payload: %v", err)
+		}
 	}
 }

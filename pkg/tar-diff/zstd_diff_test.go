@@ -3,6 +3,7 @@ package tardiff
 import (
 	"archive/tar"
 	"bytes"
+	"crypto/rand"
 	"io"
 	"os"
 	"path/filepath"
@@ -146,6 +147,23 @@ func TestDiffApplyZstdBinaryDiff(t *testing.T) {
 	delta, wantNew := diffApplyZstd(t, BinaryDiffZstd, defaultMaxZstdDiffSize, defaultMaxBsdiffSize, oldData, newData)
 	if !bytes.Equal(delta.Bytes()[:len(protocol.DeltaHeaderv2)], protocol.DeltaHeaderv2[:]) {
 		t.Fatalf("expected tardf2 header, got %q", delta.Bytes()[:8])
+	}
+	applyDelta(t, &delta, oldData, wantNew)
+}
+
+func TestDiffZstdFallsBackToRawData(t *testing.T) {
+	oldData := bytes.Repeat([]byte("abcdefghijklmnop"), 256)
+	newData := make([]byte, 64*1024)
+	if _, err := rand.Read(newData); err != nil {
+		t.Fatalf("rand: %v", err)
+	}
+
+	delta, wantNew := diffApplyZstd(t, BinaryDiffZstd, defaultMaxZstdDiffSize, defaultMaxBsdiffSize, oldData, newData)
+	ops, _ := decodeDeltaOps(t, delta.Bytes())
+	for _, op := range ops {
+		if op == protocol.DeltaOpZstdDict {
+			t.Fatal("expected raw DATA fallback, got ZstdDict")
+		}
 	}
 	applyDelta(t, &delta, oldData, wantNew)
 }

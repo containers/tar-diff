@@ -100,10 +100,25 @@ func (d *deltaWriter) Close() error {
 }
 
 func (d *deltaWriter) WriteContent(data []byte) error {
-	d.buffer = append(d.buffer, data...)
-
-	if len(d.buffer) >= deltaDataChunkSize {
-		return d.FlushBuffer()
+	for len(data) > 0 {
+		space := deltaDataChunkSize - len(d.buffer)
+		if space <= 0 {
+			if err := d.FlushBuffer(); err != nil {
+				return err
+			}
+			continue
+		}
+		if space > len(data) {
+			space = len(data)
+		}
+		d.buffer = append(d.buffer, data[:space]...)
+		data = data[space:]
+		if len(d.buffer) < deltaDataChunkSize {
+			return nil
+		}
+		if err := d.FlushBuffer(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -230,4 +245,9 @@ func (d *deltaWriter) Write(data []byte) (int, error) {
 	n := len(data)
 	err := d.WriteContent(data)
 	return n, err
+}
+
+func (d *deltaWriter) WriteContentFrom(r io.Reader) error {
+	_, err := io.Copy(d, r)
+	return err
 }
