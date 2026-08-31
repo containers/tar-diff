@@ -101,26 +101,22 @@ func (d *deltaWriter) Close() error {
 
 func (d *deltaWriter) WriteContent(data []byte) error {
 	for len(data) > 0 {
-		space := deltaDataChunkSize - len(d.buffer)
-		if space <= 0 {
+		if len(d.buffer) >= deltaDataChunkSize {
 			if err := d.FlushBuffer(); err != nil {
 				return err
 			}
-			continue
 		}
+		space := deltaDataChunkSize - len(d.buffer)
 		if space > len(data) {
 			space = len(data)
 		}
 		d.buffer = append(d.buffer, data[:space]...)
 		data = data[space:]
-		if len(d.buffer) < deltaDataChunkSize {
-			return nil
-		}
-		if err := d.FlushBuffer(); err != nil {
-			return err
-		}
 	}
-	return nil
+	if len(d.buffer) < deltaDataChunkSize {
+		return nil
+	}
+	return d.FlushBuffer()
 }
 
 // Switches to new file if needed and ensures we're at the start of it
