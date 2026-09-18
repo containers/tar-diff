@@ -20,7 +20,8 @@ var DeltaHeader = [...]byte{'t', 'a', 'r', 'd', 'f', '1', '\n', 0}
 var DeltaHeaderv2 = [...]byte{'t', 'a', 'r', 'd', 'f', '2', '\n', 0}
 
 // CleanPath cleans up the path lexically and prevents path traversal attacks.
-// Any ".." that extends outside the first elements (or the root itself) is invalid and returns "".
+// Paths that traverse above the root are sanitized to the corresponding path
+// below the root; an empty result represents the root itself.
 // Uses filepath.Clean for proper cross-platform path handling (Windows backslashes, drive letters).
 // This is a security-critical function used by both tar-diff and tar-patch packages.
 func CleanPath(pathName string) string {
