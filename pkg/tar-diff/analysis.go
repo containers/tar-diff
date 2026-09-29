@@ -345,16 +345,13 @@ func buildSourceAnalysis(oldInfos []*tarInfo, numOldFiles int, options *Options)
 	pathToFileIndex := make(map[string]int)
 
 	for fileIdx, oldInfo := range oldInfos {
-		// Apply whiteouts from this layer to sources from earlier layers
+		// A whiteout can remove a directory, so exclude its descendants too.
+		// Opaque whiteouts likewise exclude all earlier entries below their directory.
 		for _, wo := range oldInfo.whiteouts {
-			if wo.opaque {
-				for p := range pathToFileIndex {
-					if hasPathPrefix(p, wo.path) {
-						delete(pathToFileIndex, p)
-					}
+			for p := range pathToFileIndex {
+				if hasPathPrefix(p, wo.path) {
+					delete(pathToFileIndex, p)
 				}
-			} else {
-				delete(pathToFileIndex, wo.path)
 			}
 		}
 
