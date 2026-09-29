@@ -191,12 +191,17 @@ func (d *deltaWriter) WriteAddContent(data []byte) error {
 		return err
 	}
 
-	size := uint64(len(data))
-	err = d.writeOp(protocol.DeltaOpAddData, size, data)
-	if err != nil {
-		return err
+	for len(data) > 0 {
+		chunk := data
+		if len(chunk) > deltaDataChunkSize {
+			chunk = data[:deltaDataChunkSize]
+		}
+		if err := d.writeOp(protocol.DeltaOpAddData, uint64(len(chunk)), chunk); err != nil {
+			return err
+		}
+		d.currentPos += uint64(len(chunk))
+		data = data[len(chunk):]
 	}
-	d.currentPos += size
 	return nil
 }
 
