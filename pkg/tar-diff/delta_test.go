@@ -265,6 +265,40 @@ func TestDeltaWriterWriteAddContent(t *testing.T) {
 	}
 }
 
+func TestDeltaWriterWriteAddContentChunks(t *testing.T) {
+	var output bytes.Buffer
+	deltaWriter, err := newDeltaWriter(&output, 1, deltaFormatV1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data := make([]byte, 2*deltaDataChunkSize+123)
+	for i := range data {
+		data[i] = byte(i)
+	}
+	if err := deltaWriter.WriteAddContent(data); err != nil {
+		t.Fatal(err)
+	}
+	if deltaWriter.currentPos != uint64(len(data)) {
+		t.Fatalf("currentPos = %d, want %d", deltaWriter.currentPos, len(data))
+	}
+	if err := deltaWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	ops, sizes := decodeDeltaOps(t, output.Bytes())
+	wantSizes := []uint64{deltaDataChunkSize, deltaDataChunkSize, 123}
+	if len(ops) != len(wantSizes) {
+		t.Fatalf("got %d operations, want %d", len(ops), len(wantSizes))
+	}
+	for i, op := range ops {
+		if op != protocol.DeltaOpAddData || sizes[i] != wantSizes[i] {
+			t.Errorf("operation %d = (op %d, size %d), want (op %d, size %d)",
+				i, op, sizes[i], protocol.DeltaOpAddData, wantSizes[i])
+		}
+	}
+}
+
 func TestDeltaWriterWriteOldFile(t *testing.T) {
 	var output bytes.Buffer
 
