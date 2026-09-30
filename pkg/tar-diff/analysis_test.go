@@ -49,6 +49,38 @@ type tarEntry struct {
 	mode     int64
 }
 
+func TestBuildSourceAnalysis_DirectoryWhiteout(t *testing.T) {
+	oldTar, err := createTestTar([]tarEntry{
+		{name: "boot/.kernel/version/.vmlinuz.hmac", typeflag: tar.TypeReg, data: []byte("hmac")},
+		{name: "boot/.kernel-old/keep", typeflag: tar.TypeReg, data: []byte("sibling")},
+		{name: "boot/EFI/Linux/image.efi", typeflag: tar.TypeReg, data: []byte("uki")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	whiteoutTar, err := createTestTar([]tarEntry{
+		{name: "boot/.wh..kernel", typeflag: tar.TypeReg},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	options := NewOptions()
+	options.SetApplyWhiteouts(true)
+	sources, err := AnalyzeSources([]io.ReadSeeker{oldTar, whiteoutTar}, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := sources.sourceByPath["boot/.kernel/version/.vmlinuz.hmac"]; ok {
+		t.Error("file beneath a whiteouted directory remains a delta source")
+	}
+	for _, path := range []string{"boot/.kernel-old/keep", "boot/EFI/Linux/image.efi"} {
+		if _, ok := sources.sourceByPath[path]; !ok {
+			t.Errorf("unaffected file %q is missing from delta sources", path)
+		}
+	}
+}
+
 func TestAnalyzeTar_Hardlinks(t *testing.T) {
 	entries := []tarEntry{
 		{name: "original.txt", typeflag: tar.TypeReg, data: []byte("content")},
