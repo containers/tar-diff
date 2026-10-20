@@ -41,9 +41,6 @@ func CleanPath(pathName string) string {
 	// Convert back to forward slashes to ensure consistent output
 	clean = filepath.ToSlash(clean)
 
-	// We clean the initial slash, making all result relative (or "" which is error)
-	if len(clean) > 0 && clean[0] == '/' {
-		return clean[1:]
-	}
-	return ""
+	// Strip the leading slash (filepath.Join always adds one).
+	return clean[1:]
 }
