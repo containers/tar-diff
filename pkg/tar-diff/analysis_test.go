@@ -49,6 +49,31 @@ type tarEntry struct {
 	mode     int64
 }
 
+func TestAnalyzeSourcesAllowUnreadableSources(t *testing.T) {
+	for _, allow := range []bool{false, true} {
+		oldTar, err := createTestTar([]tarEntry{
+			{name: "private", typeflag: tar.TypeReg, mode: 0600, data: []byte("private content")},
+			{name: "public", typeflag: tar.TypeReg, mode: 0644, data: []byte("public content")},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		options := NewOptions()
+		options.SetAllowUnreadableSources(allow)
+		sources, err := AnalyzeSources([]io.ReadSeeker{oldTar}, options)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := sources.sourceByPath["private"]; ok != allow {
+			t.Errorf("allow unreadable = %v: private source present = %v", allow, ok)
+		}
+		if _, ok := sources.sourceByPath["public"]; !ok {
+			t.Errorf("allow unreadable = %v: public source is missing", allow)
+		}
+	}
+}
+
 func TestBuildSourceAnalysis_DirectoryWhiteout(t *testing.T) {
 	oldTar, err := createTestTar([]tarEntry{
 		{name: "boot/.kernel/version/.vmlinuz.hmac", typeflag: tar.TypeReg, data: []byte("hmac")},
@@ -91,7 +116,7 @@ func TestAnalyzeTar_Hardlinks(t *testing.T) {
 		t.Fatalf("Failed to create test tar: %v", err)
 	}
 
-	info, err := analyzeTar(tarFile, false)
+	info, err := analyzeTar(tarFile, false, false)
 	if err != nil {
 		t.Fatalf("analyzeTar failed: %v", err)
 	}
@@ -131,7 +156,7 @@ func TestAnalyzeTar_MultipleHardlinks(t *testing.T) {
 		t.Fatalf("Failed to create test tar: %v", err)
 	}
 
-	info, err := analyzeTar(tarFile, false)
+	info, err := analyzeTar(tarFile, false, false)
 	if err != nil {
 		t.Fatalf("analyzeTar failed: %v", err)
 	}
@@ -165,7 +190,7 @@ func TestAnalyzeTar_DuplicateFilesAndHardlinks(t *testing.T) {
 		t.Fatalf("Failed to create test tar: %v", err)
 	}
 
-	info, err := analyzeTar(tarFile, false)
+	info, err := analyzeTar(tarFile, false, false)
 	if err != nil {
 		t.Fatalf("analyzeTar failed: %v", err)
 	}
@@ -206,12 +231,12 @@ func TestAnalyzeForDelta_HardlinksInTargetInfo(t *testing.T) {
 		t.Fatalf("newTar.Seek: %v", err)
 	}
 
-	oldInfo, err := analyzeTar(oldTar, false)
+	oldInfo, err := analyzeTar(oldTar, false, false)
 	if err != nil {
 		t.Fatalf("analyzeTar (old) failed: %v", err)
 	}
 
-	newInfo, err := analyzeTar(newTar, false)
+	newInfo, err := analyzeTar(newTar, false, false)
 	if err != nil {
 		t.Fatalf("analyzeTar (new) failed: %v", err)
 	}
@@ -258,7 +283,7 @@ func TestAnalyzeTar_HardlinksAddMultiplePaths(t *testing.T) {
 		t.Fatalf("Failed to create test tar: %v", err)
 	}
 
-	info, err := analyzeTar(tarFile, false)
+	info, err := analyzeTar(tarFile, false, false)
 	if err != nil {
 		t.Fatalf("analyzeTar failed: %v", err)
 	}
@@ -318,12 +343,12 @@ func TestAnalyzeForDelta_MatchViaHardlinkPath(t *testing.T) {
 		t.Fatalf("newTar.Seek: %v", err)
 	}
 
-	oldInfo, err := analyzeTar(oldTar, false)
+	oldInfo, err := analyzeTar(oldTar, false, false)
 	if err != nil {
 		t.Fatalf("analyzeTar (old) failed: %v", err)
 	}
 
-	newInfo, err := analyzeTar(newTar, false)
+	newInfo, err := analyzeTar(newTar, false, false)
 	if err != nil {
 		t.Fatalf("analyzeTar (new) failed: %v", err)
 	}
@@ -421,12 +446,12 @@ func TestAnalyzeForDeltaHardlinkChains(t *testing.T) {
 		t.Fatalf("newTar.Seek: %v", err)
 	}
 
-	oldInfo, err := analyzeTar(oldTar, false)
+	oldInfo, err := analyzeTar(oldTar, false, false)
 	if err != nil {
 		t.Fatalf("analyzeTar (old) failed: %v", err)
 	}
 
-	newInfo, err := analyzeTar(newTar, false)
+	newInfo, err := analyzeTar(newTar, false, false)
 	if err != nil {
 		t.Fatalf("analyzeTar (new) failed: %v", err)
 	}
@@ -469,7 +494,7 @@ func TestAnalyzeTarDirectoriesAndSymlinks(t *testing.T) {
 		t.Fatalf("Failed to create test tar: %v", err)
 	}
 
-	info, err := analyzeTar(tarFile, false)
+	info, err := analyzeTar(tarFile, false, false)
 	if err != nil {
 		t.Fatalf("analyzeTar failed: %v", err)
 	}
@@ -496,7 +521,7 @@ func TestAnalyzeTarDuplicateContent(t *testing.T) {
 		t.Fatalf("Failed to create test tar: %v", err)
 	}
 
-	info, err := analyzeTar(tarFile, false)
+	info, err := analyzeTar(tarFile, false, false)
 	if err != nil {
 		t.Fatalf("analyzeTar failed: %v", err)
 	}
@@ -523,7 +548,7 @@ func TestAnalyzeTarEmpty(t *testing.T) {
 		t.Fatalf("Failed to create test tar: %v", err)
 	}
 
-	info, err := analyzeTar(tarFile, false)
+	info, err := analyzeTar(tarFile, false, false)
 	if err != nil {
 		t.Fatalf("analyzeTar failed: %v", err)
 	}
@@ -548,7 +573,7 @@ func TestAnalyzeTarMultipleHardlinks(t *testing.T) {
 		t.Fatalf("Failed to create test tar: %v", err)
 	}
 
-	info, err := analyzeTar(tarFile, false)
+	info, err := analyzeTar(tarFile, false, false)
 	if err != nil {
 		t.Fatalf("analyzeTar failed: %v", err)
 	}
@@ -768,7 +793,7 @@ func TestUseTarFile(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := useTarFile(test.hdr, test.cleanPath)
+			result := useTarFile(test.hdr, test.cleanPath, false)
 			if result != test.expected {
 				t.Errorf("useTarFile() = %v, expected %v", result, test.expected)
 			}
@@ -782,7 +807,7 @@ func TestUseTarFileWithoutWorldReadPermission(t *testing.T) {
 	hdr := &tar.Header{Typeflag: tar.TypeReg, Size: 100, Mode: 0600}
 	cleanPath := "valid/path.txt"
 
-	result := useTarFile(hdr, cleanPath)
+	result := useTarFile(hdr, cleanPath, false)
 	if result {
 		t.Error("Expected useTarFile to return false for file without world-read permission (other-readable)")
 	}

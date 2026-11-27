@@ -329,16 +329,17 @@ const (
 
 // Options configures the behavior of the diff operation.
 type Options struct {
-	compressionLevel     int
-	maxBsdiffSize        int64
-	maxZstdDiffSize      int64
-	binaryDiffMethod     BinaryDiffMethod
-	zstdDiffLevel        int // <0 means use compressionLevel
-	zstdDiffWindow       int // bytes; 0 means auto from source size
-	sourcePrefixes       []string
-	ignoreSourcePrefixes []string
-	tmpDir               string
-	applyWhiteouts       bool
+	compressionLevel       int
+	maxBsdiffSize          int64
+	maxZstdDiffSize        int64
+	binaryDiffMethod       BinaryDiffMethod
+	zstdDiffLevel          int // <0 means use compressionLevel
+	zstdDiffWindow         int // bytes; 0 means auto from source size
+	sourcePrefixes         []string
+	ignoreSourcePrefixes   []string
+	tmpDir                 string
+	applyWhiteouts         bool
+	allowUnreadableSources bool
 }
 
 // SetCompressionLevel sets the zstd compression level for the outer delta stream.
@@ -407,6 +408,13 @@ func (o *Options) SetApplyWhiteouts(apply bool) {
 	o.applyWhiteouts = apply
 }
 
+// SetAllowUnreadableSources allows files without world-read permission to be
+// reused or used as binary diff sources. It is disabled by default. The caller
+// must ensure that these files are readable when applying the delta.
+func (o *Options) SetAllowUnreadableSources(allow bool) {
+	o.allowUnreadableSources = allow
+}
+
 // NewOptions creates a new Options struct with default values.
 func NewOptions() *Options {
 	return &Options{
@@ -448,7 +456,7 @@ func AnalyzeSources(oldTarFiles []io.ReadSeeker, options *Options) (*SourceAnaly
 
 	oldInfos := make([]*tarInfo, len(oldTarFiles))
 	for i, oldTarFile := range oldTarFiles {
-		oldInfo, err := analyzeTar(oldTarFile, options.applyWhiteouts)
+		oldInfo, err := analyzeTar(oldTarFile, options.applyWhiteouts, options.allowUnreadableSources)
 		if err != nil {
 			return nil, err
 		}
@@ -476,7 +484,7 @@ func DiffWithSources(sources *SourceAnalysis, oldTarFiles []io.ReadSeeker, newTa
 		return fmt.Errorf("expected %d old tar files, got %d", sources.numOldFiles, len(oldTarFiles))
 	}
 
-	newInfo, err := analyzeTar(newTarFile, false)
+	newInfo, err := analyzeTar(newTarFile, false, options.allowUnreadableSources)
 	if err != nil {
 		return err
 	}

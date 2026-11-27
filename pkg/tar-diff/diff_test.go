@@ -34,12 +34,12 @@ func TestGenerateDelta_Hardlinks(t *testing.T) {
 		t.Fatalf("oldTar.Seek: %v", err)
 	}
 
-	newInfo, err := analyzeTar(newTar, false)
+	newInfo, err := analyzeTar(newTar, false, false)
 	if err != nil {
 		t.Fatalf("analyzeTar (new) failed: %v", err)
 	}
 
-	oldInfo, err := analyzeTar(oldTar, false)
+	oldInfo, err := analyzeTar(oldTar, false, false)
 	if err != nil {
 		t.Fatalf("analyzeTar (old) failed: %v", err)
 	}
@@ -114,12 +114,12 @@ func TestGenerateDelta_MixedHardlinksAndDuplicates(t *testing.T) {
 		t.Fatalf("oldTar.Seek: %v", err)
 	}
 
-	newInfo, err := analyzeTar(newTar, false)
+	newInfo, err := analyzeTar(newTar, false, false)
 	if err != nil {
 		t.Fatalf("analyzeTar (new) failed: %v", err)
 	}
 
-	oldInfo, err := analyzeTar(oldTar, false)
+	oldInfo, err := analyzeTar(oldTar, false, false)
 	if err != nil {
 		t.Fatalf("analyzeTar (old) failed: %v", err)
 	}

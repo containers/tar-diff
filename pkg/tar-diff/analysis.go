@@ -98,7 +98,7 @@ func isSparseFile(hdr *tar.Header) bool {
 // Any ".." that extends outside the first elements (or the root itself) is invalid and returns ""
 
 // Ignore all the files that make no sense to either delta or re-use as is
-func useTarFile(hdr *tar.Header, cleanPath string) bool {
+func useTarFile(hdr *tar.Header, cleanPath string, allowUnreadable bool) bool {
 	// Don't use invalid paths (as returned by cleanPath)
 	if cleanPath == "" {
 		return false
@@ -121,15 +121,15 @@ func useTarFile(hdr *tar.Header, cleanPath string) bool {
 
 	// We don't want to delta files that may be problematic to
 	// read (e.g. /etc/shadow) when applying the delta. These are
-	// uncommon anyway so no big deal.
-	if (hdr.Mode & 00004) == 0 {
+	// excluded by default, unless the caller guarantees access at apply time.
+	if !allowUnreadable && (hdr.Mode&00004) == 0 {
 		return false
 	}
 
 	return true
 }
 
-func analyzeTar(tarMaybeCompressed io.Reader, applyWhiteouts bool) (*tarInfo, error) {
+func analyzeTar(tarMaybeCompressed io.Reader, applyWhiteouts bool, allowUnreadable bool) (*tarInfo, error) {
 	tarFile, _, err := compression.AutoDecompress(tarMaybeCompressed)
 	if err != nil {
 		return nil, err
@@ -200,7 +200,7 @@ func analyzeTar(tarMaybeCompressed io.Reader, applyWhiteouts bool) (*tarInfo, er
 			files[oldIndex].overwritten = true
 		}
 
-		if !useTarFile(hdr, pathname) {
+		if !useTarFile(hdr, pathname, allowUnreadable) {
 			continue
 		}
 
